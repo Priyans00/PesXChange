@@ -11,6 +11,19 @@ export default function ProtectedPage() {
 
   useEffect(() => {
     const supabase = createClient();
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      console.log("Auth state changed:", _event, session);
+      if (session?.user) {
+        setUser(session.user);
+        setLoading(false);
+      } else {
+        setUser(null);
+        setLoading(false);
+        router.replace("/auth/login");
+      }
+    });
+
     supabase.auth.getUser().then(({ data }) => {
       if (!data?.user) {
         router.replace("/auth/login");
@@ -19,8 +32,13 @@ export default function ProtectedPage() {
       }
       setLoading(false);
     });
+
+    return () => {
+      listener.subscription.unsubscribe();
+    };
   }, [router]);
 
+  // Only render UI after loading is false (client has mounted and state is set)
   if (loading) return <div>Loading...</div>;
 
   return (
