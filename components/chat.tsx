@@ -3,20 +3,28 @@ import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
 
+type Message = {
+  id: string;
+  sender_id: string;
+  receiver_id: string;
+  message: string;
+  created_at?: string;
+};
+
+const supabase = createClient();
+
 export function Chat({ currentUserId, otherUserId }: { currentUserId: string, otherUserId: string }) {
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const supabase = createClient();
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Fetch messages (move outside useEffect for reuse)
+  // Fetch messages
   async function fetchMessages() {
     const res = await fetch(`/api/messages?user1=${currentUserId}&user2=${otherUserId}`);
     const data = await res.json();
     setMessages(Array.isArray(data) ? data : []);
   }
 
-  // Fetch messages
   useEffect(() => {
     fetchMessages();
 
@@ -45,7 +53,7 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [currentUserId, otherUserId, supabase]);
+  }, [currentUserId, otherUserId]);
 
   // Scroll to bottom on new message
   useEffect(() => {
@@ -66,7 +74,6 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
       }),
     });
     setInput("");
-    // Re-fetch messages after sending
     fetchMessages();
   }
 
@@ -78,7 +85,7 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
             key={msg.id}
             className={`my-1 ${msg.sender_id === currentUserId ? "text-right" : "text-left"}`}
           >
-            <span className="inline-block px-2 py-1 rounded bg-black-200">{msg.message}</span>
+            <span className="inline-block px-2 py-1 rounded bg-gray-200">{msg.message}</span>
           </div>
         ))}
         <div ref={bottomRef} />
