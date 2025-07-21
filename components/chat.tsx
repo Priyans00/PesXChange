@@ -53,7 +53,7 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [currentUserId, otherUserId]);
+  }, [currentUserId, fetchMessages, otherUserId]);
 
   // Scroll to bottom on new message
   useEffect(() => {
