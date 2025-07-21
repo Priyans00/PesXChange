@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "./ui/button";
 
@@ -18,12 +18,15 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Fetch messages
-  async function fetchMessages() {
-    const res = await fetch(`/api/messages?user1=${currentUserId}&user2=${otherUserId}`);
-    const data = await res.json();
-    setMessages(Array.isArray(data) ? data : []);
-  }
+  // Fetch messages directly from Supabase
+  const fetchMessages = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("*")
+      .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`)
+      .order("created_at", { ascending: true });
+    if (!error && Array.isArray(data)) setMessages(data as Message[]);
+  }, [currentUserId, otherUserId]);
 
   useEffect(() => {
     fetchMessages();
@@ -37,8 +40,8 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
         (payload) => {
           const msg = payload.new;
           if (
-            msg.sender_id === otherUserId &&
-            msg.receiver_id === currentUserId
+            (msg.sender_id === otherUserId && msg.receiver_id === currentUserId) ||
+            (msg.sender_id === currentUserId && msg.receiver_id === otherUserId)
           ) {
             fetchMessages();
           }
@@ -53,26 +56,24 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [currentUserId, fetchMessages, otherUserId]);
+  }, [fetchMessages, currentUserId, otherUserId]);
 
   // Scroll to bottom on new message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Send message
+  // Send message directly to Supabase
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim()) return;
-    await fetch("/api/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    await supabase.from("messages").insert([
+      {
         sender_id: currentUserId,
         receiver_id: otherUserId,
         message: input,
-      }),
-    });
+      },
+    ]);
     setInput("");
     fetchMessages();
   }
