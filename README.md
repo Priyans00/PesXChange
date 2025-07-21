@@ -20,8 +20,14 @@
      NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
      NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
      ```
+4. **Setup the SQL database:**
+   1. Go to https://app.supabase.com
+   2. Open your project
+   3. Go to **SQL Editor** → New Query
+   4. Paste the contents of `setup.sql`
+   5. Click **Run**
 
-4. **Run the development server:**
+5. **Run the development server:**
    ```sh
    npm run dev
    ```
