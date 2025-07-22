@@ -65,7 +65,7 @@ export default function ChatPage() {
               key={user.id}
               onClick={() => router.push(`/chat?user=${user.id}`)}
               className={`block w-full text-left p-2 mb-2 rounded ${
-                otherUserId === user.id ? "bg-blue-100" : "hover:bg-gray-100"
+                otherUserId === user.id ? "bg-grey-700" : "hover:bg-cyan-400 hover:text-black hover:border-white-300"
               }`}
             >
               {user.name || user.email}
@@ -78,7 +78,7 @@ export default function ChatPage() {
         {currentUserId && otherUserId ? (
           <Chat currentUserId={currentUserId} otherUserId={otherUserId} />
         ) : (
-          <div className="text-gray-500">Select a user to start chatting.</div>
+          <div className="text-gray-500 text-[22px]">Select a user to start chatting.</div>
         )}
       </div>
     </div>

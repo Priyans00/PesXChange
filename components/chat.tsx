@@ -86,7 +86,7 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
             key={msg.id}
             className={`my-1 ${msg.sender_id === currentUserId ? "text-right" : "text-left"}`}
           >
-            <span className="inline-block px-2 py-1 rounded bg-gray-200">{msg.message}</span>
+            <span className="inline-block px-2 py-1 rounded bg-gray-900">{msg.message}</span>
           </div>
         ))}
         <div ref={bottomRef} />
