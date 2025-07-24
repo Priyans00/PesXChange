@@ -1,84 +1,72 @@
+// app/chat/page.tsx
 "use client";
-
 import { useEffect, useState } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Chat } from "@/components/chat";
+import { ThemeSwitcher } from "@/components/theme-switcher";
+import { Chat } from "@/components/chat"; // see next section
 
-type User = {
-  id: string;
-  name?: string;
-  email: string;
-};
+type User = { id: string; name?: string; email: string };
 
 export default function ChatPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const params = useSearchParams();
   const supabase = createClient();
 
   const [users, setUsers] = useState<User[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const otherUserId = searchParams.get("user");
+  const otherUserId = params.get("user");
+  const otherUser = users.find((u) => u.id === otherUserId);
 
-  // Get current logged-in user
   useEffect(() => {
-    const getUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        setCurrentUserId(data.user.id);
-      }
-    };
-    getUser();
-  }, [supabase.auth]);
-
-  // Fetch all users from Supabase `users` table
-  useEffect(() => {
-    const fetchUsers = async () => {
-      const { data, error } = await supabase
-        .from("users")
-        .select("id, name, email"); // Add 'name' column if available
-
-      if (!error && data) {
-        setUsers(data);
-      } else {
-        console.error("Error fetching users:", error);
-      }
-      setLoading(false);
-    };
-
-    fetchUsers();
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id);
+    });
+    supabase.from("users").select("id, name, email")
+      .then(({ data }) => { if (data) setUsers(data); setLoading(false) });
   }, [supabase]);
 
-  if (loading) return <div className="p-4">Loading users...</div>;
+  if (loading) return <div className="p-4 text-lg">Loading users...</div>;
 
   return (
-    <div className="flex h-screen">
-      {/* Sidebar for selecting user */}
-      <div className="w-1/4 border-r p-4 overflow-y-auto">
-        <h2 className="text-lg font-bold mb-2">Chats</h2>
-        {users
-          .filter((u) => u.id !== currentUserId) // Don't show self
-          .map((user) => (
+    <div className="flex h-screen bg-gray-100 text-white dark:bg-gray-900 dark:text-gray-100">
+      {/* Sidebar */}
+      <div className="w-1/4 border-r border-gray-700 dark:border-gray-300 p-4 flex flex-col">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold dark:text-white">Chats</h2>
+          <ThemeSwitcher />
+        </div>
+        <div className="flex-1 overflow-y-auto ">
+          {users.filter(u => u.id !== currentUserId).map(u => (
             <button
-              key={user.id}
-              onClick={() => router.push(`/chat?user=${user.id}`)}
-              className={`block w-full text-left p-2 mb-2 rounded ${
-                otherUserId === user.id ? "bg-grey-700" : "hover:bg-cyan-400 hover:text-black hover:border-white-300"
+              key={u.id}
+              onClick={() => router.push(`/chat?user=${u.id}`)}
+              className={`block w-full text-left px-3 py-2 mb-2 rounded-lg transition ${
+                u.id === otherUserId
+                  ? "bg-indigo-600 text-white"
+                  : "hover:bg-indigo-500/30 dark:hover:bg-indigo-400/30"
               }`}
             >
-              {user.name || user.email}
+              <span className="text-lg font-medium">{u.name || u.email}</span>
             </button>
           ))}
+        </div>
       </div>
 
-      {/* Chat box */}
+      {/* Chat Container */}
       <div className="flex-1 p-4">
-        {currentUserId && otherUserId ? (
-          <Chat currentUserId={currentUserId} otherUserId={otherUserId} />
+        {currentUserId && otherUserId && otherUser ? (
+          <Chat
+            currentUserId={currentUserId}
+            otherUserId={otherUserId}
+            otherUserName={otherUser.name || otherUser.email}
+          />
         ) : (
-          <div className="text-gray-500 text-[22px]">Select a user to start chatting.</div>
+          <div className="flex h-full items-center justify-center text-2xl text-gray-400">
+            Select a chat to start messaging.
+          </div>
         )}
       </div>
     </div>

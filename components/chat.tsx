@@ -1,7 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Button } from "./ui/button";
 
 type Message = {
   id: string;
@@ -13,35 +12,40 @@ type Message = {
 
 const supabase = createClient();
 
-export function Chat({ currentUserId, otherUserId }: { currentUserId: string, otherUserId: string }) {
+export function Chat({
+  currentUserId,
+  otherUserId,
+}: {
+  currentUserId: string;
+  otherUserId: string;
+}) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  // Fetch messages directly from Supabase
   const fetchMessages = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("messages")
+    const { data } = await supabase
+      .from<Message>("messages")
       .select("*")
-      .or(`and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`)
+      .or(
+        `and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
+      )
       .order("created_at", { ascending: true });
-    if (!error && Array.isArray(data)) setMessages(data as Message[]);
+    if (data) setMessages(data);
   }, [currentUserId, otherUserId]);
 
   useEffect(() => {
     fetchMessages();
-
-    // Realtime subscription
     const channel = supabase
       .channel("messages")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "messages" },
         (payload) => {
-          const msg = payload.new;
+          const m = payload.new as Message;
           if (
-            (msg.sender_id === otherUserId && msg.receiver_id === currentUserId) ||
-            (msg.sender_id === currentUserId && msg.receiver_id === otherUserId)
+            (m.sender_id === currentUserId && m.receiver_id === otherUserId) ||
+            (m.sender_id === otherUserId && m.receiver_id === currentUserId)
           ) {
             fetchMessages();
           }
@@ -49,21 +53,17 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
       )
       .subscribe();
 
-    // Polling interval (every 3 seconds)
     const interval = setInterval(fetchMessages, 3000);
-
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
   }, [fetchMessages, currentUserId, otherUserId]);
 
-  // Scroll to bottom on new message
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Send message directly to Supabase
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
     if (!input.trim()) return;
@@ -79,26 +79,41 @@ export function Chat({ currentUserId, otherUserId }: { currentUserId: string, ot
   }
 
   return (
-    <div className="flex flex-col h-full border rounded p-2">
-      <div className="flex-1 overflow-y-auto mb-2">
+    <div className="flex flex-col h-full bg-gray-200 dark:bg-gray-900 rounded-lg p-4">
+      <div className="flex-1 overflow-y-auto mb-4 space-y-2">
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`my-1 ${msg.sender_id === currentUserId ? "text-right" : "text-left"}`}
+            className={`flex ${
+              msg.sender_id === currentUserId ? "justify-end" : "justify-start"
+            }`}
           >
-            <span className="inline-block px-2 py-1 rounded bg-gray-900">{msg.message}</span>
+            <p
+              className={`max-w-xs px-4 py-2 rounded-lg text-lg ${
+                msg.sender_id === currentUserId
+                  ? "text-black dark:text-white"
+                  : "bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-white"
+              }`}
+            >
+              {msg.message}
+            </p>
           </div>
         ))}
         <div ref={bottomRef} />
       </div>
       <form onSubmit={sendMessage} className="flex gap-2">
         <input
-          className="flex-1 border rounded px-2"
+          className="flex-1 border-2 border-gray-600 dark:border-gray-300 rounded-lg px-3 py-2 bg-gray-900 dark:bg-white text-white dark:text-black placeholder-gray-400"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Type a message..."
+          placeholder="Type your message..."
         />
-        <Button type="submit">Send</Button>
+        <button
+          type="submit"
+          className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
+        >
+          Send
+        </button>
       </form>
     </div>
   );
