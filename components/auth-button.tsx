@@ -5,14 +5,20 @@ import { Button } from "./ui/button";
 import { createClient } from "@/lib/supabase/client";
 import { LogoutButton } from "./logout-button";
 import { useEffect, useState } from "react";
+import { User } from '@supabase/supabase-js';
 
 export function AuthButton() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        console.error("Error fetching user:", error.message);
+        return;
+      }
       setUser(data.user);
+
     });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);

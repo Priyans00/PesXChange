@@ -24,16 +24,24 @@ export function Chat({
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = useCallback(async () => {
-    const { data } = await supabase
-      .from<Message>("messages")
-      .select("*")
-      .or(
-        `and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
-      )
-      .order("created_at", { ascending: true });
-    if (data) setMessages(data);
-  }, [currentUserId, otherUserId]);
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .or(
+      `and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
+    )
+    .order("created_at", { ascending: true });
 
+  if (error) {
+    console.error("Error fetching messages:", error.message);
+    return;
+  }
+
+  if (data) {
+    setMessages(data as Message[]);
+  }
+  }, [currentUserId, otherUserId]);
+  
   useEffect(() => {
     fetchMessages();
     const channel = supabase

@@ -4,10 +4,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { InfoIcon } from "lucide-react";
 import { Chat } from "@/components/chat";
+import { User } from '@supabase/supabase-js';
 
 export default function ProtectedPage() {
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState<User | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
   const sellerId = searchParams.get("sellerId");
@@ -53,7 +54,7 @@ export default function ProtectedPage() {
           After Login
         </div>
       </div>
-      <Chat currentUserId={user.id} otherUserId={sellerId}/>
+      <Chat currentUserId={user!.id} otherUserId={sellerId}/>
     </div>
   );
 }

@@ -61,7 +61,6 @@ export default function ChatPage() {
           <Chat
             currentUserId={currentUserId}
             otherUserId={otherUserId}
-            otherUserName={otherUser.name || otherUser.email}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-2xl text-gray-400">
