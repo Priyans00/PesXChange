@@ -83,7 +83,6 @@ export function Chat({
       },
     ]);
     setInput("");
-    fetchMessages();
   }
 
   return (
