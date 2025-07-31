@@ -55,7 +55,7 @@ export function Chat({
             (m.sender_id === currentUserId && m.receiver_id === otherUserId) ||
             (m.sender_id === otherUserId && m.receiver_id === currentUserId)
           ) {
-            fetchMessages();
+            setMessages((prevMessages) => [...prevMessages, m]);
           }
         }
       )
