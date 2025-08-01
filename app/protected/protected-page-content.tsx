@@ -17,6 +17,7 @@ export function ProtectedPageContent() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [sellerInfo, setSellerInfo] = useState<sellerInfo | null>(null);
+  const [sellerLoading, setSellerLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const sellerId = searchParams.get("sellerId");
@@ -46,14 +47,23 @@ export function ProtectedPageContent() {
 
     // Fetch seller info if sellerId exists
     if (sellerId) {
-      supabase.auth.admin.getUserById(sellerId).then(({ data, error }) => {
-        if (!error && data?.user) {
-          setSellerInfo({
-            id: data.user.id,
-            email: data.user.email
-          });
-        }
-      });
+      setSellerLoading(true);
+      fetch(`/api/users/${sellerId}`)
+        .then(res => res.json())
+        .then(data => {
+          if (!data.error) {
+            setSellerInfo({
+              id: data.id,
+              email: data.email
+            });
+          }
+        })
+        .catch(error => {
+          console.error('Error fetching seller info:', error);
+        })
+        .finally(() => {
+          setSellerLoading(false);
+        });
     }
 
     return () => {
@@ -104,10 +114,18 @@ export function ProtectedPageContent() {
               </div>
               <div>
                 <h1 className="font-semibold">
-                  {sellerInfo?.email?.split('@')[0] || 'Seller'}
+                  {sellerLoading ? (
+                    <div className="h-4 w-20 bg-muted rounded animate-pulse" />
+                  ) : (
+                    sellerInfo?.email?.split('@')[0] || 'Seller'
+                  )}
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                  {sellerInfo?.email || 'seller@example.com'}
+                  {sellerLoading ? (
+                    <div className="h-3 w-32 bg-muted rounded animate-pulse" />
+                  ) : (
+                    sellerInfo?.email || 'seller@example.com'
+                  )}
                 </p>
               </div>
             </div>
