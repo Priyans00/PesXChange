@@ -14,8 +14,8 @@ export function ChatPageContent() {
   const [users, setUsers] = useState<User[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const otherUserId = params.get("user") ?? "";
-  const otherUser = users.find((u) => u.id === otherUserId);
+  const otherUserId = params.get("user") ?? null;
+  const otherUser = otherUserId ? users.find((u) => u.id === otherUserId) : null;
 
   useEffect(() => {
     const supabase = createClient();
