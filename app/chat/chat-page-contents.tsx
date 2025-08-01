@@ -36,11 +36,11 @@ export function ChatPageContent() {
   if (loading) return <div className="p-4 text-lg">Loading users...</div>;
 
   return (
-    <div className="flex h-screen bg-gray-100 text-white dark:bg-gray-900 dark:text-gray-100">
+    <div className="flex h-screen bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100">
       {/* Sidebar */}
       <div className="w-1/4 border-r border-gray-700 dark:border-gray-300 p-4 flex flex-col">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-semibold dark:text-white">Chats</h2>
+          <h2 className="text-xl font-semibold text-black dark:text-white">Chats</h2>
           <ThemeSwitcher />
         </div>
         <div className="flex-1 overflow-y-auto">

@@ -1,6 +1,8 @@
 "use client";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Send, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type Message = {
   id: string;
@@ -21,29 +23,20 @@ export function Chat({
 }) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const fetchMessages = useCallback(async () => {
-  const { data, error } = await supabase
-    .from("messages")
-    .select("*")
-    .or(
-      `and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
-    )
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    console.error("Error fetching messages:", error.message);
-    return;
-  }
-
-  if (data) {
-    setMessages(data as Message[]);
-  }
+    const res = await fetch(
+      `/api/messages?user1=${currentUserId}&user2=${otherUserId}`
+    );
+    const data = await res.json();
+    setMessages(Array.isArray(data) ? data : []);
   }, [currentUserId, otherUserId]);
-  
+
   useEffect(() => {
     fetchMessages();
+
     const channel = supabase
       .channel("messages")
       .on(
@@ -61,7 +54,8 @@ export function Chat({
       )
       .subscribe();
 
-    const interval = setInterval(fetchMessages, 3000);
+    const interval = setInterval(fetchMessages, 5000);
+
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
@@ -74,54 +68,93 @@ export function Chat({
 
   async function sendMessage(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
-    await supabase.from("messages").insert([
-      {
-        sender_id: currentUserId,
-        receiver_id: otherUserId,
-        message: input,
-      },
-    ]);
-    setInput("");
+    if (!input.trim() || isSending) return;
+
+    setIsSending(true);
+
+    try {
+      await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sender_id: currentUserId,
+          receiver_id: otherUserId,
+          message: input.trim(),
+        }),
+      });
+      setInput("");
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    } finally {
+      setIsSending(false);
+    }
   }
 
+  const formatTime = (timestamp?: string) => {
+    if (!timestamp) return "";
+    return new Date(timestamp).toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  };
+
   return (
-    <div className="flex flex-col h-full bg-gray-200 dark:bg-gray-900 rounded-lg p-4">
-      <div className="flex-1 overflow-y-auto mb-4 space-y-2">
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${
-              msg.sender_id === currentUserId ? "justify-end" : "justify-start"
-            }`}
-          >
-            <p
-              className={`max-w-xs px-4 py-2 rounded-lg text-lg ${
-                msg.sender_id === currentUserId
-                  ? "text-black dark:text-white"
-                  : "bg-gray-100 text-gray-900 dark:bg-gray-900 dark:text-white"
+    <div className="flex flex-col h-screen bg-background">
+      {/* Messages Area */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {messages.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground">
+            <p>No messages yet. Start the conversation!</p>
+          </div>
+        ) : (
+          messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={`flex ${
+                msg.sender_id === currentUserId ? "justify-end" : "justify-start"
               }`}
             >
-              {msg.message}
-            </p>
-          </div>
-        ))}
+              <div
+                className={`max-w-[70%] rounded-lg px-4 py-2 ${
+                  msg.sender_id === currentUserId
+                    ? "bg-primary text-primary-foreground ml-auto"
+                    : "bg-muted text-muted-foreground"
+                }`}
+              >
+                <p className="text-sm">{msg.message}</p>
+                <p className="text-xs opacity-70 mt-1">
+                  {formatTime(msg.created_at)}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
         <div ref={bottomRef} />
       </div>
-      <form onSubmit={sendMessage} className="flex gap-2">
-        <input
-          className="flex-1 border-2 border-gray-600 dark:border-gray-300 rounded-lg px-3 py-2 bg-gray-900 dark:bg-white text-white dark:text-black placeholder-gray-400"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Type your message..."
-        />
-        <button
-          type="submit"
-          className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg"
-        >
-          Send
-        </button>
-      </form>
+
+      {/* Message Input */}
+      <div className="border-t p-4">
+        <form onSubmit={sendMessage} className="flex gap-2">
+          <input
+            className="flex-1 px-3 py-2 border border-input bg-background rounded-md text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Type your message..."
+            disabled={isSending}
+          />
+          <Button
+            type="submit"
+            size="sm"
+            disabled={!input.trim() || isSending}
+          >
+            {isSending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Send className="h-4 w-4" />
+            )}
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }
