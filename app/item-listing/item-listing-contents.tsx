@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
-import { Search, Filter, MapPin, Star, MessageCircle, Heart, Eye } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Search, MapPin, Star, MessageCircle, Heart, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import Link from "next/link";
@@ -25,6 +25,11 @@ interface Item {
   likes: number;
   description: string;
   createdAt: string;
+}
+
+interface CurrentUser{
+    id: string;
+    name?: string;
 }
 
 const categories = [
@@ -55,7 +60,7 @@ export function ItemListingContents() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedCondition, setSelectedCondition] = useState("All");
   const [selectedPriceRange, setSelectedPriceRange] = useState("All");
-  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
 
   // Get current user
   useEffect(() => {
@@ -65,12 +70,8 @@ export function ItemListingContents() {
     });
   }, []);
 
-  // Fetch items from API
-  useEffect(() => {
-    fetchItems();
-  }, [searchQuery, selectedCategory, selectedCondition, selectedPriceRange]);
-
-  const fetchItems = async () => {
+  // Memoize fetchItems to prevent unnecessary re-renders
+  const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -117,22 +118,27 @@ export function ItemListingContents() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [searchQuery, selectedCategory, selectedCondition, selectedPriceRange]);
+
+  // Fetch items when dependencies change
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
           Buy Second-hand Items at PES University
         </h1>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Find great deals on books, electronics, furniture and more from fellow students
         </p>
       </div>
 
       {/* Search and Filter Bar */}
-      <div className="bg-white rounded-lg shadow-sm border p-4 mb-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 mb-6">
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Search */}
           <div className="flex-1">
@@ -141,7 +147,7 @@ export function ItemListingContents() {
               <input
                 type="text"
                 placeholder="Search for items..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
@@ -151,7 +157,7 @@ export function ItemListingContents() {
           {/* Quick Filters */}
           <div className="flex flex-wrap gap-2">
             <select
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               value={selectedCategory}
               onChange={(e) => setSelectedCategory(e.target.value)}
             >
@@ -161,7 +167,7 @@ export function ItemListingContents() {
             </select>
 
             <select
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               value={selectedCondition}
               onChange={(e) => setSelectedCondition(e.target.value)}
             >
@@ -171,7 +177,7 @@ export function ItemListingContents() {
             </select>
 
             <select
-              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               value={selectedPriceRange}
               onChange={(e) => setSelectedPriceRange(e.target.value)}
             >
@@ -185,7 +191,7 @@ export function ItemListingContents() {
 
       {/* Results Summary */}
       <div className="flex justify-between items-center mb-6">
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           Showing {items.length} items
         </p>
         <div className="flex gap-2">
@@ -199,14 +205,14 @@ export function ItemListingContents() {
       {loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="bg-white rounded-lg shadow-sm border p-4 animate-pulse">
-              <div className="h-48 bg-gray-300 rounded-lg mb-4"></div>
-              <div className="h-4 bg-gray-300 rounded mb-2"></div>
-              <div className="h-6 bg-gray-300 rounded mb-2"></div>
-              <div className="h-4 bg-gray-300 rounded mb-4"></div>
+            <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 animate-pulse">
+              <div className="h-48 bg-gray-300 dark:bg-gray-600 rounded-lg mb-4"></div>
+              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
+              <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
+              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded mb-4"></div>
               <div className="flex gap-2">
-                <div className="flex-1 h-8 bg-gray-300 rounded"></div>
-                <div className="h-8 w-8 bg-gray-300 rounded"></div>
+                <div className="flex-1 h-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
+                <div className="h-8 w-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
               </div>
             </div>
           ))}
@@ -225,7 +231,7 @@ export function ItemListingContents() {
       {/* No Results */}
       {!loading && items.length === 0 && (
         <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No items found matching your criteria</p>
+          <p className="text-gray-500 dark:text-gray-400 text-lg">No items found matching your criteria</p>
           <Button 
             variant="outline" 
             className="mt-4"
@@ -244,8 +250,8 @@ export function ItemListingContents() {
   );
 }
 
-// Item Card Component
-function ItemCard({ item, currentUser }: { item: Item; currentUser: any }) {
+// Item Card Component - Updated with dark mode support
+function ItemCard({ item, currentUser }: { item: Item; currentUser: CurrentUser | null }) {
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(item.likes);
 
@@ -269,7 +275,7 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: any }) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border hover:shadow-md transition-shadow duration-200">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
       {/* Image */}
       <div className="relative">
         <Image
@@ -281,7 +287,7 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: any }) {
         />
         <button
           className={`absolute top-3 right-3 p-2 rounded-full ${
-            isLiked ? 'bg-red-500 text-white' : 'bg-white text-gray-600'
+            isLiked ? 'bg-red-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
           } hover:scale-110 transition-transform`}
           onClick={handleLike}
           disabled={!currentUser}
@@ -299,22 +305,22 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: any }) {
 
       {/* Content */}
       <div className="p-4">
-        <h3 className="font-semibold text-gray-900 text-sm mb-2 line-clamp-2">
+        <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm mb-2 line-clamp-2">
           {item.title}
         </h3>
 
         {/* Price */}
         <div className="mb-2">
-          <span className="text-xl font-bold text-green-600">
+          <span className="text-xl font-bold text-green-600 dark:text-green-400">
             ₹{item.price.toLocaleString()}
           </span>
           {item.year && (
-            <span className="text-gray-500 text-sm ml-2">• {item.year}</span>
+            <span className="text-gray-500 dark:text-gray-400 text-sm ml-2">• {item.year}</span>
           )}
         </div>
 
         {/* Location */}
-        <div className="flex items-center text-gray-500 text-sm mb-2">
+        <div className="flex items-center text-gray-500 dark:text-gray-400 text-sm mb-2">
           <MapPin className="h-4 w-4 mr-1" />
           {item.location}
         </div>
@@ -322,10 +328,10 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: any }) {
         {/* Condition */}
         <div className="mb-3">
           <span className={`text-xs px-2 py-1 rounded-full ${
-            item.condition === 'New' ? 'bg-green-100 text-green-800' :
-            item.condition === 'Like New' ? 'bg-blue-100 text-blue-800' :
-            item.condition === 'Good' ? 'bg-yellow-100 text-yellow-800' :
-            'bg-gray-100 text-gray-800'
+            item.condition === 'New' ? 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200' :
+            item.condition === 'Like New' ? 'bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200' :
+            item.condition === 'Good' ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200' :
+            'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
           }`}>
             {item.condition}
           </span>
@@ -338,12 +344,12 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: any }) {
               {item.seller.name.charAt(0)}
             </div>
             <div className="ml-2">
-              <p className="text-sm font-medium text-gray-900">{item.seller.name}</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.seller.name}</p>
               <div className="flex items-center">
                 <Star className="h-3 w-3 text-yellow-400 fill-current" />
-                <span className="text-xs text-gray-500 ml-1">{item.seller.rating}</span>
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">{item.seller.rating}</span>
                 {item.seller.verified && (
-                  <span className="text-xs text-green-600 ml-1">✓</span>
+                  <span className="text-xs text-green-600 dark:text-green-400 ml-1">✓</span>
                 )}
               </div>
             </div>
@@ -351,7 +357,7 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: any }) {
         </div>
 
         {/* Stats */}
-        <div className="flex items-center justify-between text-gray-500 text-xs mb-3">
+        <div className="flex items-center justify-between text-gray-500 dark:text-gray-400 text-xs mb-3">
           <div className="flex items-center">
             <Eye className="h-3 w-3 mr-1" />
             {item.views}
@@ -364,11 +370,13 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: any }) {
 
         {/* Actions */}
         <div className="flex gap-2">
-          <Button className="flex-1" size="sm">
-            View Details
+          <Button className="flex-1" size="sm" asChild>
+            <Link href={`/item/${item.id}`}>
+              View Details
+            </Link>
           </Button>
           <Button variant="outline" size="sm" asChild>
-            <Link href={`/chat?user=${item.seller.id}`}>
+            <Link href={`/protected?sellerId=${item.seller.id}`}>
               <MessageCircle className="h-4 w-4" />
             </Link>
           </Button>
