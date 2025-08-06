@@ -1,10 +1,12 @@
 "use client";
 import { useState, useEffect, useCallback } from "react";
-import { Search, MapPin, Star, MessageCircle, Heart, Eye } from "lucide-react";
+import { Search, MapPin, Star, MessageCircle, Heart, Eye, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { useRouter } from "next/navigation";
 
 interface Item {
   id: string;
@@ -61,12 +63,20 @@ export function ItemListingContents() {
   const [selectedCondition, setSelectedCondition] = useState("All");
   const [selectedPriceRange, setSelectedPriceRange] = useState("All");
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
 
-  // Get current user
+  // Get current user - but don't require authentication
   useEffect(() => {
     const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      setCurrentUser(data.user);
+    supabase.auth.getUser().then(({ data, error }) => {
+      if (error) {
+        if (error.message !== "Auth session missing!") {
+          console.error("Error fetching user:", error.message);
+        }
+        setCurrentUser(null);
+      } else {
+        setCurrentUser(data.user);
+      }
     });
   }, []);
 
@@ -126,7 +136,7 @@ export function ItemListingContents() {
   }, [fetchItems]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6 dark:bg-gray-900 bg-gray-50">
+    <div className="max-w-7xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
@@ -223,7 +233,12 @@ export function ItemListingContents() {
       {!loading && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {items.map((item) => (
-            <ItemCard key={item.id} item={item} currentUser={currentUser} />
+            <ItemCard 
+              key={item.id} 
+              item={item} 
+              currentUser={currentUser} 
+              onAuthRequired={() => setShowAuthDialog(true)}
+            />
           ))}
         </div>
       )}
@@ -246,17 +261,83 @@ export function ItemListingContents() {
           </Button>
         </div>
       )}
+
+      {/* Authentication Required Dialog */}
+      <AuthRequiredDialog 
+        open={showAuthDialog} 
+        onOpenChange={setShowAuthDialog} 
+      />
     </div>
   );
 }
 
-// Item Card Component - Updated with dark mode support
-function ItemCard({ item, currentUser }: { item: Item; currentUser: CurrentUser | null }) {
+// Auth Required Dialog Component
+function AuthRequiredDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const router = useRouter();
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-5 w-5" />
+            Sign in Required
+          </DialogTitle>
+          <DialogDescription>
+            You need to create an account or sign in to chat with sellers and like items.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col gap-3 pt-4">
+          <Button 
+            onClick={() => {
+              onOpenChange(false);
+              router.push('/auth/signup');
+            }}
+            className="w-full"
+          >
+            Create Account
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              onOpenChange(false);
+              router.push('/auth/login');
+            }}
+            className="w-full"
+          >
+            Sign In
+          </Button>
+          <Button 
+            variant="ghost" 
+            onClick={() => onOpenChange(false)}
+            className="w-full"
+          >
+            Continue Browsing
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// Updated Item Card Component
+function ItemCard({ 
+  item, 
+  currentUser, 
+  onAuthRequired 
+}: { 
+  item: Item; 
+  currentUser: CurrentUser | null;
+  onAuthRequired: () => void;
+}) {
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(item.likes);
 
   const handleLike = async () => {
-    if (!currentUser) return;
+    if (!currentUser) {
+      onAuthRequired();
+      return;
+    }
 
     try {
       const response = await fetch(`/api/items/${item.id}/like`, {
@@ -274,6 +355,15 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: CurrentUser 
     }
   };
 
+  const handleChatClick = () => {
+    if (!currentUser) {
+      onAuthRequired();
+      return;
+    }
+    // Navigate to chat if user is authenticated
+    window.location.href = `/chat?user=${item.seller.id}`;
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
       {/* Image */}
@@ -288,9 +378,8 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: CurrentUser 
         <button
           className={`absolute top-3 right-3 p-2 rounded-full ${
             isLiked ? 'bg-red-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
-          } hover:scale-110 transition-transform`}
+          } hover:scale-110 transition-transform shadow-md`}
           onClick={handleLike}
-          disabled={!currentUser}
         >
           <Heart className="h-4 w-4" fill={isLiked ? 'currentColor' : 'none'} />
         </button>
@@ -375,10 +464,13 @@ function ItemCard({ item, currentUser }: { item: Item; currentUser: CurrentUser 
               View Details
             </Link>
           </Button>
-          <Button variant="outline" size="sm" asChild>
-            <Link href={`/protected?sellerId=${item.seller.id}`}>
-              <MessageCircle className="h-4 w-4" />
-            </Link>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleChatClick}
+            className="flex items-center justify-center"
+          >
+            <MessageCircle className="h-4 w-4" />
           </Button>
         </div>
       </div>
