@@ -126,7 +126,7 @@ export function ItemListingContents() {
   }, [fetchItems]);
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-6">
+    <div className="max-w-7xl mx-auto px-4 py-6 dark:bg-gray-900 bg-gray-50">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100 mb-2">
