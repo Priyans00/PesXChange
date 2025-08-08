@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Chat } from "@/components/chat"; 
 
-type User = { id: string; name?: string; email: string };
+type User = { id: string; name?: string };
 
 export function ChatPageContent() {
   const router = useRouter();
@@ -25,8 +25,8 @@ export function ChatPageContent() {
     });
   
     supabase
-      .from("users")
-      .select("id, name, email")
+      .from("user_profiles")
+      .select("id, name")
       .then(({ data }) => {
         if (data) setUsers(data);
         setLoading(false);
@@ -54,7 +54,7 @@ export function ChatPageContent() {
                   : "hover:bg-indigo-500/30 dark:hover:bg-indigo-400/30"
               }`}
             >
-              <span className="text-lg font-medium">{u.name || u.email}</span>
+              <span className="text-lg font-medium">{u.name }</span>
             </button>
           ))}
         </div>

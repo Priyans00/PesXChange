@@ -1,9 +1,7 @@
 import { Hero } from "@/components/pages/hero";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import Link from "next/link";
-import { AuthButton } from "@/components/auth-button";
-import { EnvVarWarning } from "@/components/env-var-warning";
-import { hasEnvVars } from "@/lib/utils";
+
 
 export default function Home() {
   return (
@@ -16,7 +14,6 @@ export default function Home() {
 
           <div className="flex items-center gap-4">
             <ThemeSwitcher />
-            {!hasEnvVars ? <EnvVarWarning /> : <AuthButton />}
           </div>
         </div>
       </nav>
