@@ -39,7 +39,11 @@ export function LoginForm({
         password,
       });
       if (error) throw error;
-      router.push("/protected");
+      
+      // Check for redirect URL in sessionStorage
+      const redirectTo = sessionStorage.getItem('redirectAfterLogin');
+      sessionStorage.removeItem('redirectAfterLogin'); // Clean up
+      router.push(redirectTo || "/protected");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
@@ -49,10 +53,14 @@ export function LoginForm({
 
   const handleGoogleSignIn = async () => {
     const supabase = createClient();
+    
+    // Check for redirect URL in sessionStorage
+    const redirectTo = sessionStorage.getItem('redirectAfterLogin') || "/protected";
+    
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/protected`,
+        redirectTo: `${window.location.origin}${redirectTo}`,
       },
     });
     if (error) setError(error.message);
