@@ -41,11 +41,13 @@ export function SignUpForm({
     }
 
     try {
+      const redirectTo = sessionStorage.getItem('redirectAfterLogin') || "/protected";
+      
       const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/protected`,
+          emailRedirectTo: `${window.location.origin}${redirectTo}`,
         },
       });
       if (error) throw error;
@@ -59,10 +61,14 @@ export function SignUpForm({
 
   const handleGoogleSignIn = async () => {
     const supabase = createClient();
+    
+    // Check for redirect URL in sessionStorage
+    const redirectTo = sessionStorage.getItem('redirectAfterLogin') || "/protected";
+    
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/protected`,
+        redirectTo: `${window.location.origin}${redirectTo}`,
       },
     });
     if (error) setError(error.message);
