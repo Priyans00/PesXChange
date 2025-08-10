@@ -11,7 +11,8 @@ import {
   Menu,
   X,
   Home,
-  Heart
+  Heart,
+  UserIcon
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -77,6 +78,7 @@ export function Navbar() {
     ...(user ? [
       { href: "/chat", label: "Messages", icon: MessageCircle },
       { href: "/favorites", label: "Favorites", icon: Heart },
+      { href: "/profile", label: "Profile", icon: UserIcon },
     ] : [])
   ];
 
