@@ -20,8 +20,9 @@ export default function Page() {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                You&apos;ve successfully signed up. Please check your email to
-                confirm your account before signing in.
+                You&apos;ve successfully signed up with your SRN. Please check your email to
+                confirm your account before signing in. Your profile has been created
+                and you can start using PesXChange once your email is verified.
               </p>
             </CardContent>
           </Card>

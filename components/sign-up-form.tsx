@@ -21,18 +21,111 @@ export function SignUpForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div">) {
+  const [name, setName] = useState("");
+  const [srn, setSrn] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [srnError, setSrnError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSrnValid, setIsSrnValid] = useState(false);
   const router = useRouter();
+
+  const validateSrn = async (srnValue: string) => {
+    if (!srnValue) {
+      setSrnError("SRN is required");
+      setIsSrnValid(false);
+      return;
+    }
+
+    // Validate SRN format
+    const srnPattern = /^PES\d{1}[A-Z]{2}\d{2}[A-Z]{2}\d{3}$/;
+    if (!srnPattern.test(srnValue)) {
+      setSrnError("Invalid SRN format. Expected: PES2UG24CS453");
+      setIsSrnValid(false);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/check-srn', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ srn: srnValue }),
+      });
+
+      const data = await response.json();
+
+      if (data.exists) {
+        setSrnError(data.error);
+        setIsSrnValid(false);
+      } else {
+        setSrnError(null);
+        setIsSrnValid(true);
+      }
+    } catch (error) {
+      setSrnError("Error validating SRN");
+      setIsSrnValid(false);
+      console.error("SRN validation error:", error);
+    }
+  };
+
+  const handleSrnChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.toUpperCase();
+    setSrn(value);
+    
+    // Debounce validation
+    if (value.length >= 13) {
+      setTimeout(() => validateSrn(value), 500);
+    } else {
+      setSrnError(null);
+      setIsSrnValid(false);
+    }
+  };
+
+  const createUserProfile = async () => {
+    try {
+      const response = await fetch('/api/create-profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ name, srn }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || 'Failed to create profile');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Error creating profile:', error);
+      setError(error instanceof Error ? error.message : "Failed to create profile");
+      return false;
+    }
+  };
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     const supabase = createClient();
     setIsLoading(true);
     setError(null);
+
+    // Validation
+    if (!name.trim()) {
+      setError("Name is required");
+      setIsLoading(false);
+      return;
+    }
+
+    if (!isSrnValid || !srn) {
+      setError("Please enter a valid and unique SRN");
+      setIsLoading(false);
+      return;
+    }
 
     if (password !== repeatPassword) {
       setError("Passwords do not match");
@@ -41,17 +134,24 @@ export function SignUpForm({
     }
 
     try {
-      const redirectTo = sessionStorage.getItem('redirectAfterLogin') || "/protected";
-      
-      const { error } = await supabase.auth.signUp({
+      // First, sign up the user
+      const { data: authData, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}${redirectTo}`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm`,
         },
       });
-      if (error) throw error;
-      router.push("/auth/sign-up-success");
+
+      if (signUpError) throw signUpError;
+
+      if (authData.user) {
+        // Create user profile
+        const profileCreated = await createUserProfile();
+        if (profileCreated) {
+          router.push("/auth/sign-up-success");
+        }
+      }
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
@@ -62,13 +162,10 @@ export function SignUpForm({
   const handleGoogleSignIn = async () => {
     const supabase = createClient();
     
-    // Check for redirect URL in sessionStorage
-    const redirectTo = sessionStorage.getItem('redirectAfterLogin') || "/protected";
-    
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}${redirectTo}`,
+        redirectTo: `${window.location.origin}/auth/complete-profile`,
       },
     });
     if (error) setError(error.message);
@@ -94,6 +191,31 @@ export function SignUpForm({
         <CardContent>
           <form onSubmit={handleSignUp}>
             <div className="flex flex-col gap-6">
+              <div className="grid gap-2">
+                <Label htmlFor="name">Full Name</Label>
+                <Input
+                  id="name"
+                  type="text"
+                  placeholder="Enter your full name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="srn">SRN (Student Registration Number)</Label>
+                <Input
+                  id="srn"
+                  type="text"
+                  placeholder="PES2UG24CS453"
+                  required
+                  value={srn}
+                  onChange={handleSrnChange}
+                  className={srnError ? "border-red-500" : isSrnValid ? "border-green-500" : ""}
+                />
+                {srnError && <p className="text-sm text-red-500">{srnError}</p>}
+                {isSrnValid && <p className="text-sm text-green-500">✓ SRN is valid and available</p>}
+              </div>
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
@@ -131,7 +253,7 @@ export function SignUpForm({
               </div>
               {error && <p className="text-sm text-red-500">{error}</p>}
 
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <Button type="submit" className="w-full" disabled={isLoading || !isSrnValid}>
                 {isLoading ? "Creating an account..." : "Sign up"}
               </Button>
 

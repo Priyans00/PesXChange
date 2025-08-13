@@ -48,6 +48,30 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Check if user has completed their profile (for authenticated users)
+  if (user && isProtectedPath && request.nextUrl.pathname !== '/auth/complete-profile') {
+    try {
+      const { data: profile, error } = await supabase
+        .from('user_profiles')
+        .select('srn, name')
+        .eq('id', user.id)
+        .single();
+
+      // Redirect if no profile exists or if SRN is missing
+      if (error || !profile || !profile.srn) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/complete-profile";
+        return NextResponse.redirect(url);
+      }
+    } catch (error) {
+      // If there's an error checking the profile, redirect to complete profile
+      console.error("Profile check error:", error);
+      const url = request.nextUrl.clone();
+      url.pathname = "/auth/complete-profile";
+      return NextResponse.redirect(url);
+    }
+  }
+
   return supabaseResponse;
 }
 
