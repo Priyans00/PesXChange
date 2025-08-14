@@ -85,28 +85,8 @@ export function SignUpForm({
     }
   };
 
-  const createUserProfile = async () => {
-    try {
-      const response = await fetch('/api/create-profile', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ name, srn }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create profile');
-      }
-
-      return true;
-    } catch (error) {
-      console.error('Error creating profile:', error);
-      setError(error instanceof Error ? error.message : "Failed to create profile");
-      return false;
-    }
-  };
+  // Profile creation deferred until after email confirmation
+  // const createUserProfile = async () => { ... }
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,23 +115,20 @@ export function SignUpForm({
 
     try {
       // First, sign up the user
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
+      const { error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/confirm`,
+          emailRedirectTo: `${window.location.origin}/auth/confirm?next=${encodeURIComponent('/auth/complete-profile')}`,
         },
       });
 
       if (signUpError) throw signUpError;
 
-      if (authData.user) {
-        // Create user profile
-        const profileCreated = await createUserProfile();
-        if (profileCreated) {
-          router.push("/auth/sign-up-success");
-        }
-      }
+      // Don't create profile immediately - wait for email confirmation
+      // Profile will be created after email confirmation in the complete-profile page
+      router.push("/auth/sign-up-success");
+      
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
