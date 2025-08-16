@@ -142,7 +142,7 @@ export default function ProductDetailsPage() {
     }
   };
 
-  const handleChatClick = () => {
+  const handleChatClick = async () => {
     if (!user) {
       router.push('/auth/login');
       return;

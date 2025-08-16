@@ -355,13 +355,15 @@ function ItemCard({
     }
   };
 
+  const router = useRouter();
+
   const handleChatClick = () => {
     if (!currentUser) {
       onAuthRequired();
       return;
     }
     // Navigate to chat if user is authenticated
-    window.location.href = `/chat?user=${item.seller.id}`;
+    router.push(`/chat?user=${item?.seller.id}`);
   };
 
   return (
