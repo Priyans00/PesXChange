@@ -11,7 +11,6 @@ type User = { id: string; name?: string };
 export function ChatPageContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const [users, setUsers] = useState<User[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [activeChats, setActiveChats] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,25 +20,15 @@ export function ChatPageContent() {
     ? activeChats.find((u) => u.id === otherUserId)
     : null;
 
-
-  // Get current user & all users
+  // Get current user
   useEffect(() => {
-
     const supabase = createClient();
-
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) setCurrentUserId(data.user.id);
     });
-
-    supabase
-      .from("user_profiles")
-      .select("id, name")
-      .then(({ data }) => {
-        if (data) setUsers(data);
-      });
   }, []);
 
-  // Fetch active chats and merge listing seller
+  // Fetch active chats and optionally merge listing seller
   useEffect(() => {
     if (!currentUserId) return;
 
@@ -49,19 +38,21 @@ export function ChatPageContent() {
         let data: User[] = await res.json();
 
         // Merge seller from listing page if not present
-        if (otherUserId && !data.some((u) => u.id === otherUserId)) {
-          data = [
-            { id: otherUserId, name: users.find((u) => u.id === otherUserId)?.name || "Unknown" },
-            ...data,
-          ];
-        }
+        if (otherUserId) {
+          const supabase = createClient();
+          const { data: sellerUser } = await supabase
+            .from("user_profiles")
+            .select("id, name")
+            .eq("id", otherUserId)
+            .single();
 
-        // Update seller name if users loaded
-        data = data.map((u) =>
-          u.id === otherUserId
-            ? { ...u, name: users.find((user) => user.id === otherUserId)?.name || "Unknown" }
-            : u
-        );
+          const name = sellerUser?.name || "Unknown";
+          const exists = data.some((u) => u.id === otherUserId);
+
+          data = exists
+            ? data.map((u) => (u.id === otherUserId ? { ...u, name } : u))
+            : [{ id: otherUserId, name }, ...data];
+        }
 
         setActiveChats(data);
       } catch (err) {
@@ -72,7 +63,7 @@ export function ChatPageContent() {
     };
 
     fetchActiveChats();
-  }, [currentUserId, otherUserId, users]);
+  }, [currentUserId, otherUserId]);
 
   if (loading) return <div className="p-4 text-lg">Loading users...</div>;
 

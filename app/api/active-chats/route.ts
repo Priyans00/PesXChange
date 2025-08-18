@@ -11,6 +11,9 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+
+    type Message = { sender_id: string; receiver_id: string };
+
     // Find all users that have exchanged messages with this user
     const { data: messages, error } = await supabase
       .from("messages")
@@ -21,7 +24,7 @@ export async function GET(req: NextRequest) {
 
     // Get unique other user IDs
     const otherUserIds = new Set<string>();
-    messages?.forEach((m: any) => {
+    messages?.forEach((m: Message) => {
       if (m.sender_id !== userId) otherUserIds.add(m.sender_id);
       if (m.receiver_id !== userId) otherUserIds.add(m.receiver_id);
     });
@@ -37,7 +40,8 @@ export async function GET(req: NextRequest) {
     if (usersError) throw usersError;
 
     return NextResponse.json(users || []);
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Failed to fetch chats" }, { status: 500 });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to fetch chats";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
