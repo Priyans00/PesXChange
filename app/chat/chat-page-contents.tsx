@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeSwitcher } from "@/components/theme-switcher";
@@ -65,12 +65,12 @@ export function ChatPageContent() {
     fetchActiveChats();
   }, [currentUserId, otherUserId]);
 
-  if (loading) return <div className="p-4 text-lg">Loading users...</div>;
-
   const filteredChats = useMemo(
     () => activeChats.filter((u) => u.id !== currentUserId),
     [activeChats, currentUserId]
   );
+
+  if (loading) return <div className="p-4 text-lg">Loading users...</div>;
 
   return (
     <div className="flex h-screen bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100">
