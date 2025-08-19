@@ -67,7 +67,10 @@ export function ChatPageContent() {
 
   if (loading) return <div className="p-4 text-lg">Loading users...</div>;
 
-  const filteredChats = activeChats.filter((u) => u.id !== currentUserId);
+  const filteredChats = useMemo(
+    () => activeChats.filter((u) => u.id !== currentUserId),
+    [activeChats, currentUserId]
+  );
 
   return (
     <div className="flex h-screen bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-100">
