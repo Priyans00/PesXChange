@@ -1,5 +1,5 @@
 'use client';
-import { ShoppingBag, MessageCircle, Shield, Zap, Users, Heart } from "lucide-react";
+import { ShoppingBag, MessageCircle, Zap, Heart } from "lucide-react";
 
 export function Features() {
   const features = [

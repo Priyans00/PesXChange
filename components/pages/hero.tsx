@@ -2,7 +2,6 @@
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { PaperPlaneIcon, ShoppingBagIcon, PackageIcon, HandshakeIcon, AtomIcon } from "./Icons";
-import { Trophy } from "lucide-react";
 
 export function Hero() {
   return (
