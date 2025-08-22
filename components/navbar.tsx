@@ -171,7 +171,6 @@ export function Navbar() {
         </div>
 
         {/* Mobile Menu */}
-        {/* Mobile Menu */}
         {isMenuOpen && (
           <div className="md:hidden py-4 border-t border-gray-200 dark:border-gray-700">
             <div className="flex flex-col space-y-2">
