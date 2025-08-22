@@ -125,24 +125,8 @@ export function SellFormContents() {
     
     setIsSubmitting(true);
     try {
-      // Convert images to base64 or URLs for now (simple solution)
-      // In production, you would upload to cloud storage
-      const imageUrls: string[] = [];
-      
-      for (const file of formData.images) {
-        const reader = new FileReader();
-        const base64 = await new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-        imageUrls.push(base64);
-  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
-  const handleSubmit = async () => {
-    if (!validateStep2()) return;
-    
-    setIsSubmitting(true);
-    try {
       // File size validation
+      const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
       for (const file of formData.images) {
         if (file.size > MAX_IMAGE_SIZE) {
           setErrors({ submit: `One or more images exceed the maximum size of 5MB.` });
@@ -487,3 +471,5 @@ export function SellFormContents() {
     </div>
   );
 }
+
+export default SellFormContents;
