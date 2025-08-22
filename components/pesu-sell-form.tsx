@@ -136,7 +136,31 @@ export function SellFormContents() {
           reader.readAsDataURL(file);
         });
         imageUrls.push(base64);
+  const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
+  const handleSubmit = async () => {
+    if (!validateStep2()) return;
+    
+    setIsSubmitting(true);
+    try {
+      // File size validation
+      for (const file of formData.images) {
+        if (file.size > MAX_IMAGE_SIZE) {
+          setErrors({ submit: `One or more images exceed the maximum size of 5MB.` });
+          setIsSubmitting(false);
+          return;
+        }
       }
+      // Convert images to base64 in parallel
+      const imageUrls: string[] = await Promise.all(
+        formData.images.map(
+          (file) =>
+            new Promise<string>((resolve) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result as string);
+              reader.readAsDataURL(file);
+            })
+        )
+      );
 
       // Prepare the item data for submission
       const itemData = {
