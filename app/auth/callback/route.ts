@@ -2,10 +2,32 @@ import { createClient } from "@/lib/supabase/server";
 import { NextRequest } from "next/server";
 import { redirect } from "next/navigation";
 
+// Helper to validate that the next path is a safe internal path
+function getSafeRedirectPath(next: string | null): string {
+  const allowedPaths = [
+    "/profile",
+    "/protected", 
+    "/sell",
+    "/chat",
+    "/item-listing"
+  ];
+  
+  if (
+    typeof next === "string" &&
+    next.startsWith("/") &&
+    !next.startsWith("//") &&
+    !next.includes("://") &&
+    (allowedPaths.includes(next) || allowedPaths.some(path => next.startsWith(path + "/")))
+  ) {
+    return next;
+  }
+  return "/profile";
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/profile";
+  const next = getSafeRedirectPath(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();
@@ -15,7 +37,7 @@ export async function GET(request: NextRequest) {
       const { data: { user }, error } = await supabase.auth.exchangeCodeForSession(code);
       
       if (error) {
-        console.error("OAuth callback error:", error);
+        console.error("OAuth callback error:", error?.message || String(error));
         redirect(`/auth/error?error=${encodeURIComponent(error.message)}`);
       }
 
@@ -32,12 +54,16 @@ export async function GET(request: NextRequest) {
 
       // If profile doesn't exist or is incomplete, redirect to complete profile
       if (profileError || !profile || !profile.name || !profile.srn) {
-        console.log("User needs to complete profile");
+        if (process.env.NODE_ENV === 'development') {
+          console.log("User needs to complete profile");
+        }
         redirect("/auth/complete-profile");
       }
 
       // Profile exists and is complete, redirect to intended destination
-      console.log("User has complete profile, redirecting to:", next);
+      if (process.env.NODE_ENV === 'development') {
+        console.log("User has complete profile, redirecting ....");
+      }
       redirect(next);
       
     } catch (error) {
