@@ -55,12 +55,12 @@ export function LoginForm({
     const supabase = createClient();
     
     // Check for redirect URL in sessionStorage
-    const redirectTo = sessionStorage.getItem('redirectAfterLogin') || "/protected";
+    const redirectTo = sessionStorage.getItem('redirectAfterLogin') || "/profile";
     
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}${redirectTo}`,
+        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
       },
     });
     if (error) setError(error.message);

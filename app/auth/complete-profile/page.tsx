@@ -45,7 +45,7 @@ export default function CompleteProfilePage() {
         .single();
 
       if (profile) {
-        router.push('/protected');
+        router.push('/profile');
       }
     };
 
@@ -136,7 +136,7 @@ export default function CompleteProfilePage() {
         throw new Error(data.error || 'Failed to create profile');
       }
 
-      router.push('/protected');
+      router.push('/profile');
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {
