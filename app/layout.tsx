@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import "./globals.css";
 import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
 import { Navbar } from "@/components/navbar";
+import LenisProvider from "@/components/LenisProvider";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -29,16 +30,18 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="antialiased">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange>
-          <Navbar />
-          <main className="min-h-screen">
-            {children}
-          </main>
-        </ThemeProvider>
+        <LenisProvider>
+          <ThemeProvider
+            attribute="class"
+            defaultTheme="system"
+            enableSystem
+            disableTransitionOnChange>
+            <Navbar />
+            <main className="min-h-screen">
+              {children}
+            </main>
+          </ThemeProvider>
+        </LenisProvider>
       </body>
     </html>
   );

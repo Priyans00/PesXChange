@@ -5,7 +5,7 @@
 /* Custom Font Declaration */
 @font-face {
   font-family: 'Pixelbasel';
-  src: url('/fonts/Spirit.otf') format('truetype');
+  src: url('/fonts/Typographica.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
@@ -73,10 +73,12 @@
   }
   html {
     font-family: 'Pixelbasel', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    word-spacing: 0.5em; /* Makes single spaces appear as double spaces */
   }
   body {
     @apply bg-background text-foreground;
     font-family: 'Pixelbasel', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+    word-spacing: 0.5em; /* Makes single spaces appear as double spaces */
   }
 }
 
@@ -95,4 +97,12 @@
     background-position: 0 0, 12px 12px;
     opacity: 0.2;
   }
+}
+
+html, body {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+html::-webkit-scrollbar, body::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
 }
