@@ -44,7 +44,9 @@ const conditions = [
 ];
 
 export function SellFormContents({ user }: SellFormContentsProps) {
-  console.log("Current user:", user?.email); // Use user to prevent unused variable warning
+  // Legacy component - user parameter preserved for compatibility
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _user = user;
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);

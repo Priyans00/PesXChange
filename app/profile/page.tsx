@@ -1,5 +1,10 @@
+import { WithAuth } from "@/components/with-auth";
 import { ProfileComponent } from "./profile-component";
 
 export default function ProfilePage() {
-  return <ProfileComponent />;
+  return (
+    <WithAuth>
+      <ProfileComponent />
+    </WithAuth>
+  );
 }

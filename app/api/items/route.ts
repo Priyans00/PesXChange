@@ -15,7 +15,7 @@ export async function GET(req: NextRequest) {
   const offset = parseInt(searchParams.get("offset") || "0");
 
   try {
-    // First, get items with basic info
+    // First, get items with basic info and category names
     let query = supabase
       .from("items")
       .select(`
@@ -102,7 +102,7 @@ export async function GET(req: NextRequest) {
           location: item.location,
           year: item.year,
           condition: item.condition,
-          category: item.categories?.name || "Others",
+          category: item.categories?.name || "Others", // Get category name from relation
           images: item.images || [],
           views: item.views || 0,
           likes: count || 0,
@@ -131,59 +131,92 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   
   try {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
     const body = await req.json();
     const {
       title,
       description,
       price,
       location,
-      year,
       condition,
       category,
-      images
+      images,
+      seller_id,
+      is_available = true,
+      views = 0
     } = body;
 
-    // Get category ID
+    // Validate required fields
+    if (!title || !description || !price || !seller_id) {
+      return NextResponse.json({ 
+        error: "Missing required fields: title, description, price, seller_id" 
+      }, { status: 400 });
+    }
+
+    // Verify the seller exists in user_profiles
+    const { data: seller, error: sellerError } = await supabase
+      .from("user_profiles")
+      .select("id, name")
+      .eq("id", seller_id)
+      .single();
+
+    if (sellerError || !seller) {
+      return NextResponse.json({ 
+        error: "Invalid seller_id or seller not found" 
+      }, { status: 400 });
+    }
+
+    // Get or create category ID
     let categoryId = null;
     if (category && category !== "Others") {
-      const { data: categoryData } = await supabase
+      // Try to find existing category
+      const { data: existingCategory } = await supabase
         .from("categories")
         .select("id")
         .eq("name", category)
         .single();
-      categoryId = categoryData?.id;
+
+      if (existingCategory) {
+        categoryId = existingCategory.id;
+      } else {
+        // Create new category if it doesn't exist
+        const { data: newCategory, error: categoryError } = await supabase
+          .from("categories")
+          .insert([{ name: category }])
+          .select("id")
+          .single();
+
+        if (!categoryError && newCategory) {
+          categoryId = newCategory.id;
+        }
+      }
     }
 
+    // Create the item
     const { data, error } = await supabase
       .from("items")
       .insert([
         {
           title,
           description,
-          price,
+          price: parseFloat(price),
           location: location || "PES University, Bangalore",
-          year,
           condition,
-          category_id: categoryId,
+          category_id: categoryId, // Use category_id instead of category
           images: images || [],
-          seller_id: user.id
+          seller_id,
+          is_available,
+          views
         }
       ])
       .select()
       .single();
 
     if (error) {
+      console.error("Database error creating item:", error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    console.log("Item created successfully:", data);
     return NextResponse.json(data);
   } catch (error) {
     console.error("Error creating item:", error);

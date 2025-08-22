@@ -5,28 +5,32 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { Chat } from "@/components/chat";
+import { useAuth } from "@/contexts/auth-context";
 
 type User = { id: string; name?: string };
 
 export function ChatPageContent() {
   const router = useRouter();
   const params = useSearchParams();
-  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [activeChats, setActiveChats] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Use PESU Auth
+  const { user: currentUser } = useAuth();
+  const currentUserId = currentUser?.id || null;
 
   const otherUserId = params.get("user") ?? null;
   const otherUser = otherUserId
     ? activeChats.find((u) => u.id === otherUserId)
     : null;
 
-  // Get current user
+  // Redirect to login if not authenticated
   useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data }) => {
-      if (data.user) setCurrentUserId(data.user.id);
-    });
-  }, []);
+    if (!currentUser) {
+      router.push('/auth/login?redirectTo=/chat');
+      return;
+    }
+  }, [currentUser, router]);
 
   // Fetch active chats and optionally merge listing seller
   useEffect(() => {
@@ -35,7 +39,23 @@ export function ChatPageContent() {
     const fetchActiveChats = async () => {
       try {
         const res = await fetch(`/api/active-chats?userId=${currentUserId}`);
-        let data: User[] = await res.json();
+        
+        if (!res.ok) {
+          throw new Error(`Failed to fetch active chats: ${res.status}`);
+        }
+        
+        let data = await res.json();
+
+        // Handle error responses from API
+        if (data && data.error) {
+          throw new Error(data.error);
+        }
+
+        // Ensure data is an array
+        if (!Array.isArray(data)) {
+          console.warn('Active chats API did not return an array:', data);
+          data = [];
+        }
 
         // Merge seller from listing page if not present
         if (otherUserId) {
@@ -47,16 +67,17 @@ export function ChatPageContent() {
             .single();
 
           const name = sellerUser?.name || "Unknown";
-          const exists = data.some((u) => u.id === otherUserId);
+          const exists = data.some((u: User) => u.id === otherUserId);
 
           data = exists
-            ? data.map((u) => (u.id === otherUserId ? { ...u, name } : u))
+            ? data.map((u: User) => (u.id === otherUserId ? { ...u, name } : u))
             : [{ id: otherUserId, name }, ...data];
         }
 
         setActiveChats(data);
       } catch (err) {
         console.error("Failed to fetch active chats:", err);
+        setActiveChats([]); // Set empty array on error
       } finally {
         setLoading(false);
       }
