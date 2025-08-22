@@ -5,7 +5,7 @@
 /* Custom Font Declaration */
 @font-face {
   font-family: 'Pixelbasel';
-  src: url('/fonts/Typographica.ttf') format('truetype');
+  src: url('/fonts/Pixelbasel.ttf') format('truetype');
   font-weight: normal;
   font-style: normal;
   font-display: swap;
