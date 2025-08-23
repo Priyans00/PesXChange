@@ -1,3 +1,4 @@
+
 "use client";
 
 import { cn } from "@/lib/utils";
@@ -66,13 +67,22 @@ export function LoginForm({
     // Check for redirect URL in sessionStorage
     const redirectTo = sessionStorage.getItem('redirectAfterLogin') || "/profile";
     
+    // Get the current origin/domain  
+    const currentOrigin = window.location.origin;
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Initiating Google OAuth from:", currentOrigin, "redirect to:", redirectTo);
+    }
+    
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
+        redirectTo: `${currentOrigin}/auth/callback?next=${encodeURIComponent(redirectTo)}`,
       },
     });
-    if (error) setError(error.message);
+    if (error) {
+      console.error("Google OAuth initiation error:", error);
+      setError(error.message);
+    }
   };
 
   return (
