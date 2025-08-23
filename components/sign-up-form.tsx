@@ -139,13 +139,22 @@ export function SignUpForm({
   const handleGoogleSignIn = async () => {
     const supabase = createClient();
     
+    // Get the current origin/domain
+    const currentOrigin = window.location.origin;
+    if (process.env.NODE_ENV === 'development') {
+      console.log("Initiating Google OAuth from:", currentOrigin);
+    }
+    
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent('/profile')}`,
+        redirectTo: `${currentOrigin}/auth/callback?next=${encodeURIComponent('/profile')}`,
       },
     });
-    if (error) setError(error.message);
+    if (error) {
+      console.error("Google OAuth initiation error:", error);
+      setError(error.message);
+    }
   };
 
   return (
