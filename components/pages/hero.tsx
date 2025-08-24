@@ -1,50 +1,75 @@
 'use client';
-import Image from 'next/image';
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { PaperPlaneIcon, ShoppingBagIcon, PackageIcon, HandshakeIcon, AtomIcon } from "./Icons";
 
 export function Hero() {
   return (
-    <div className="flex flex-col justify-center items-center text-center gap-6 px-4 py-12 min-h-screen overflow-hidden">
-      <h1 className="text-4xl sm:text-5xl font-bold leading-tight">
-        Welcome to{' '}
-        <span className="relative inline-block">
-          {/* Light mode */}
-          <span className="bg-gradient-to-r from-orange-500 via-blue-400 to-blue-800 bg-clip-text text-transparent dark:hidden">
-            PESXChange
-          </span>
-          {/* Dark mode */}
-          <span className="bg-gradient-to-r from-orange-500 via-gray-100 to-blue-800 bg-clip-text text-transparent hidden dark:inline">
-            PESXChange
-          </span>
-        </span>
-      </h1>
-
-      <p className="text-muted-foreground max-w-xl text-base sm:text-lg">
-        Buy, sell, or rent anything within Campus — textbooks, gadgets, furniture, merch.
-      </p>
-
-      {/* Light Mode Banner */}
-      <div className="relative w-full max-w-4xl max-h-[40vh] dark:hidden h-[40vh]">
-        <Image
-          src="/banner-light.png"
-          alt="Banner Light"
-          fill
-          className="object-contain rounded-xl shadow"
-          priority
-        />
+    <div className="relative min-h-screen overflow-hidden">
+      {/* Dotted Background Pattern */}
+      <div className="absolute inset-0 bg-white dark:bg-black">
+        <div className="absolute inset-0 dotted-bg" />
       </div>
 
-      {/* Dark Mode Banner */}
-      <div className="relative w-full max-w-4xl max-h-[40vh] hidden dark:block h-[40vh]">
-        <Image
-          src="/banner-dark.png"
-          alt="Banner Dark"
-          fill
-          className="object-contain rounded-xl shadow"
-          priority
-        />
+      {/* Style illustrations */}
+      <div className="absolute inset-0 pointer-events-none">
+        {/* Top left - Paper plane */}
+        <div className="absolute top-32 left-8 md:left-32 transform -rotate-12">
+          <PaperPlaneIcon />
+        </div>
+
+        {/* Top right - Shopping bag */}
+        <div className="absolute top-40 right-8 md:right-32 transform rotate-12">
+          <ShoppingBagIcon />
+        </div>
+
+        {/* Bottom left - Package */}
+        <div className="absolute bottom-40 left-16 md:left-40 transform rotate-6">
+          <PackageIcon />
+        </div>
+
+        {/* Bottom right - Handshake */}
+        <div className="absolute bottom-32 right-16 md:right-40 transform -rotate-6">
+          <HandshakeIcon />
+        </div>
+
+        {/* E = mc² - top left */}
+        <div className="absolute top-20 left-4 md:left-20 text-gray-300 dark:text-gray-700 font-mono text-sm transform -rotate-12">
+          E = mc²
+        </div>
+
+        {/* Atom - right side */}
+        <div className="absolute top-1/2 right-4 md:right-20 transform translate-y-[-50%] rotate-12">
+          <AtomIcon />
+        </div>
       </div>
 
-      <div className="w-full p-[5px] bg-gradient-to-r from-transparent via-foreground/10 to-transparent my-6" />
+      {/* Main Content */}
+      <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-4 py-20">
+
+        {/* Main Heading */}
+        <h1 className="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-extrabold text-center mb-6 text-gray-900 dark:text-white max-w-3xl mx-auto leading-snug">
+          Buy, sell, and trade second-hand items right here on campus.
+        </h1>
+
+        {/* Subtitle */}
+        <p className="text-lg md:text-xl text-gray-600 dark:text-gray-400 text-center max-w-2xl mb-12 leading-relaxed">
+          Discover unique, one-of-a-kind goods. Buy and sell directly with people around you.
+        </p>
+
+        {/* CTA */}
+        <div className="mb-20">
+          <Button
+            asChild
+            size="lg"
+            className="bg-black dark:bg-white text-white dark:text-black hover:bg-gray-800 dark:hover:bg-gray-200 px-8 py-4 text-lg font-medium rounded-lg shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
+          >
+            <Link href="/item-listing">
+              Get Started
+            </Link>
+          </Button>
+        </div>
+      </div>
     </div>
   );
 }
