@@ -57,6 +57,10 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      fontFamily: {
+        'pixel': ['Pixelbasel', 'Inter', 'system-ui', 'sans-serif'],
+        'sans': ['Pixelbasel', 'Inter', 'system-ui', 'sans-serif'],
+      },
     },
   },
   plugins: [

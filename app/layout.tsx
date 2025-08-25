@@ -1,11 +1,9 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { ThemeProvider } from "next-themes";
-import "./globals.css";
-import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
-import { Navbar } from "@/components/pesu-navbar";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ErrorBoundary } from "@/components/error-boundary";
+import LenisProvider from "@/components/LenisProvider";
+import { ThemeProvider } from "next-themes";
+import type { ReactNode } from "react";
+import type { Metadata } from "next";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -26,34 +24,26 @@ export const metadata: Metadata = {
   },
 };
 
-const inter = Inter({
-  variable: "--font-inter",
-  display: "swap",
-  subsets: ["latin"],
-});
-
-export default function RootLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.className} antialiased`}>
-        <ErrorBoundary>
-          <AuthProvider>
-            <ThemeProvider
-              attribute="class"
-              defaultTheme="system"
-              enableSystem
-              disableTransitionOnChange>
-              <Navbar />
-              <main className="min-h-screen">
-                {children}
-              </main>
-            </ThemeProvider>
-          </AuthProvider>
-        </ErrorBoundary>
+      <body className="antialiased">
+        <LenisProvider>
+          <ErrorBoundary>
+            <AuthProvider>
+              <ThemeProvider
+                attribute="class"
+                defaultTheme="system"
+                enableSystem
+                disableTransitionOnChange>
+                <Navbar />
+                <main className="min-h-screen">
+                  {children}
+                </main>
+              </ThemeProvider>
+            </AuthProvider>
+          </ErrorBoundary>
+        </LenisProvider>
       </body>
     </html>
   );

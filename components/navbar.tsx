@@ -4,10 +4,10 @@ import Link from "next/link";
 import { useRouter, usePathname } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { User } from '@supabase/supabase-js';
-import { 
-  ShoppingBag, 
-  Plus, 
-  MessageCircle, 
+import {
+  ShoppingBag,
+  Plus,
+  MessageCircle,
   Menu,
   X,
   Home,
@@ -26,7 +26,7 @@ export function Navbar() {
 
   useEffect(() => {
     const supabase = createClient();
-    
+
     // Get initial user - handle missing session gracefully
     supabase.auth.getUser().then(({ data, error }) => {
       if (error) {
@@ -88,8 +88,8 @@ export function Navbar() {
         <div className="flex justify-between items-center h-16">
           {/* Logo */}
           <Link href="/" className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
-              <ShoppingBag className="h-5 w-5 text-white" />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center">
+              <ShoppingBag className="h-5 w-5 text-black dark:text-white" />
             </div>
             <span className="text-xl font-bold text-gray-900 dark:text-gray-100">
               PesXChange
@@ -103,11 +103,10 @@ export function Navbar() {
                 key={href}
                 href={href}
                 onClick={onClick}
-                className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  isActivePath(href)
-                    ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                className={`flex items-center space-x-1 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActivePath(href)
+                    ? 'bg-black dark:bg-white text-white dark:text-black'
                     : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
-                }`}
+                  }`}
               >
                 <Icon className="h-4 w-4" />
                 <span>{label}</span>
@@ -183,17 +182,16 @@ export function Navbar() {
                     onClick?.(e);
                     setIsMenuOpen(false);
                   }}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    isActivePath(href)
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300'
+                  className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${isActivePath(href)
+                      ? 'bg-black dark:bg-white text-white dark:text-black'
                       : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-800'
-                  }`}
+                    }`}
                 >
                   <Icon className="h-4 w-4" />
                   <span>{label}</span>
                 </Link>
               ))}
-              
+
               {user && (
                 <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center space-x-2 px-3 py-2">
@@ -216,7 +214,7 @@ export function Navbar() {
                   </Button>
                 </div>
               )}
-              
+
               {!user && (
                 <div className="pt-2 border-t border-gray-200 dark:border-gray-700 space-y-2">
                   <Button variant="ghost" size="sm" className="w-full" asChild>
@@ -234,6 +232,7 @@ export function Navbar() {
             </div>
           </div>
         )}
+
       </div>
     </nav>
   );

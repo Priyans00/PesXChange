@@ -40,6 +40,8 @@ coverage.xml
 
 # dotenv environment variables
 .env
+.env.local
+.env.development.local
 
 # Node
 node_modules/
