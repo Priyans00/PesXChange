@@ -81,14 +81,14 @@ export function LoginForm({
         <CardHeader>
           <CardTitle className="text-2xl">Login</CardTitle>
           <CardDescription>
-            Enter your PESU credentials to access the marketplace
+            Enter your PESU credentials to access the marketplace (pesuacademy app credentials)
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin}>
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
-                <Label htmlFor="username">SRN or PRN</Label>
+                <Label htmlFor="username">SRN</Label>
                 <Input
                   id="username"
                   type="text"
@@ -99,7 +99,7 @@ export function LoginForm({
                   className="uppercase"
                 />
                 <p className="text-sm text-muted-foreground">
-                  Enter your PESU Student Registration Number (SRN) or PESU Registration Number (PRN)
+                  Enter your PESU Student Registration Number (SRN)
                 </p>
               </div>
               <div className="grid gap-2">

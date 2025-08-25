@@ -1,10 +1,12 @@
+import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import { ThemeProvider } from "next-themes";
+import "./globals.css";
+import "@chatscope/chat-ui-kit-styles/dist/default/styles.min.css";
+import { Navbar } from "@/components/pesu-navbar";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ErrorBoundary } from "@/components/error-boundary";
 import LenisProvider from "@/components/LenisProvider";
-import { ThemeProvider } from "next-themes";
-import { Navbar } from "@/components/pesu-navbar";
-import type { ReactNode } from "react";
-import type { Metadata } from "next";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
