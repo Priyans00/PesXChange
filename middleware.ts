@@ -1,8 +1,30 @@
-import { updateSession } from "@/lib/supabase/middleware";
-import { type NextRequest } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
-  return await updateSession(request);
+export function middleware(request: NextRequest) {
+  // Get the pathname
+  const { pathname } = request.nextUrl;
+
+  // Routes that require authentication
+  const protectedRoutes = ['/profile', '/sell', '/chat', '/protected', '/favorites'];
+  
+  // Check if current path is protected
+  const isProtectedRoute = protectedRoutes.some(route => pathname.startsWith(route));
+  
+  // If it's a protected route, we'll let the client-side handle the redirect
+  // since we can't access localStorage from middleware
+  if (isProtectedRoute) {
+    // We can't check auth status here since we use localStorage
+    // The client-side components will handle redirects
+    return NextResponse.next();
+  }
+
+  // For auth routes, continue normally
+  if (pathname.startsWith('/auth/')) {
+    return NextResponse.next();
+  }
+
+  // Allow all other routes
+  return NextResponse.next();
 }
 
 export const config = {

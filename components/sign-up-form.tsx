@@ -153,7 +153,9 @@ export function SignUpForm({
       },
     });
     if (error) {
-      console.error("Google OAuth initiation error:", error);
+      if (process.env.NODE_ENV === 'development') {
+        console.error("Google OAuth initiation error:", error);
+      }
       setError(error.message);
     }
   };

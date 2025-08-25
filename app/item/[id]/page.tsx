@@ -7,9 +7,9 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Breadcrumb } from "@/components/ui/breadcrumb";
-import { createClient } from "@/lib/supabase/client";
 import Image from "next/image";
 import Link from "next/link";
+import { useAuth } from "@/contexts/auth-context";
 
 interface Item {
   id: string;
@@ -50,24 +50,18 @@ interface RelatedItem {
 export default function ProductDetailsPage() {
   const params = useParams();
   const router = useRouter();
+  const { user, isLoggedIn } = useAuth(); // Use PESU Auth
   const [item, setItem] = useState<Item | null>(null);
   const [relatedItems, setRelatedItems] = useState<RelatedItem[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isLiked, setIsLiked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<{ id: string } | null>(null);
   const [showContactInfo, setShowContactInfo] = useState(false);
 
   useEffect(() => {
     const fetchItemDetails = async () => {
       try {
-        const supabase = createClient();
-        
-        // Get current user
-        const { data: { user: currentUser } } = await supabase.auth.getUser();
-        setUser(currentUser);
-
         // Fetch item details
         const response = await fetch(`/api/items/${params.id}`);
         if (!response.ok) {
@@ -80,30 +74,44 @@ export default function ProductDetailsPage() {
         // Increment view count
         await fetch(`/api/items/${params.id}/view`, { method: 'POST' });
 
-        // Check if user has liked this item
-        if (currentUser) {
-          const { data: likeData } = await supabase
-            .from('item_likes')
-            .select('id')
-            .eq('user_id', currentUser.id)
-            .eq('item_id', params.id)
-            .single();
-          
-          setIsLiked(!!likeData);
+        // Check if user has liked this item (only if logged in with PESU Auth)
+        if (user?.id) {
+          try {
+            const { createClient } = await import("@/lib/supabase/client");
+            const supabase = createClient();
+            const { data: likeData } = await supabase
+              .from('item_likes')
+              .select('id')
+              .eq('user_id', user.id)
+              .eq('item_id', params.id)
+              .single();
+            
+            setIsLiked(!!likeData);
+          } catch (error) {
+            // Ignore like check errors
+            console.error('Error checking like status:', error);
+          }
         }
 
         // Fetch related items from the same category
-        const { data: related } = await supabase
-          .from('items')
-          .select(`
-            id, title, price, images, condition
-          `)
-          .eq('category_id', itemData.category_id)
-          .neq('id', params.id)
-          .eq('is_available', true)
-          .limit(4);
+        try {
+          const { createClient } = await import("@/lib/supabase/client");
+          const supabase = createClient();
+          const { data: related } = await supabase
+            .from('items')
+            .select(`
+              id, title, price, images, condition
+            `)
+            .eq('category_id', itemData.category_id)
+            .neq('id', params.id)
+            .eq('is_available', true)
+            .limit(4);
 
-        setRelatedItems(related || []);
+          setRelatedItems(related || []);
+        } catch (error) {
+          console.error('Error fetching related items:', error);
+          setRelatedItems([]);
+        }
 
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Failed to load item');
@@ -115,11 +123,11 @@ export default function ProductDetailsPage() {
     if (params.id) {
       fetchItemDetails();
     }
-  }, [params.id]);
+  }, [params.id, user?.id]);
 
   const handleLike = async () => {
-    if (!user) {
-      router.push('/auth/login');
+    if (!isLoggedIn || !user) {
+      router.push('/auth/login?redirectTo=' + encodeURIComponent(window.location.pathname));
       return;
     }
 
@@ -143,8 +151,8 @@ export default function ProductDetailsPage() {
   };
 
   const handleChatClick = () => {
-    if (!user) {
-      router.push('/auth/login');
+    if (!isLoggedIn || !user) {
+      router.push('/auth/login?redirectTo=' + encodeURIComponent(window.location.pathname));
       return;
     }
     
@@ -175,8 +183,8 @@ export default function ProductDetailsPage() {
   };
 
   const handleReport = () => {
-    if (!user) {
-      router.push('/auth/login');
+    if (!isLoggedIn || !user) {
+      router.push('/auth/login?redirectTo=' + encodeURIComponent(window.location.pathname));
       return;
     }
     

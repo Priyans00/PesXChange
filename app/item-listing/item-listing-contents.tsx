@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/contexts/auth-context";
+import { AuthUser } from "@/lib/pesu-auth";
 
 interface Item {
   id: string;
@@ -27,11 +28,6 @@ interface Item {
   likes: number;
   description: string;
   createdAt: string;
-}
-
-interface CurrentUser{
-    id: string;
-    name?: string;
 }
 
 const categories = [
@@ -62,23 +58,10 @@ export function ItemListingContents() {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedCondition, setSelectedCondition] = useState("All");
   const [selectedPriceRange, setSelectedPriceRange] = useState("All");
-  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [showAuthDialog, setShowAuthDialog] = useState(false);
-
-  // Get current user - but don't require authentication
-  useEffect(() => {
-    const supabase = createClient();
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (error) {
-        if (error.message !== "Auth session missing!") {
-          console.error("Error fetching user:", error.message);
-        }
-        setCurrentUser(null);
-      } else {
-        setCurrentUser(data.user);
-      }
-    });
-  }, []);
+  
+  // Use PESU Auth Context
+  const { user: currentUser } = useAuth();
 
   // Memoize fetchItems to prevent unnecessary re-renders
   const fetchItems = useCallback(async () => {
@@ -284,28 +267,18 @@ function AuthRequiredDialog({ open, onOpenChange }: { open: boolean; onOpenChang
             Sign in Required
           </DialogTitle>
           <DialogDescription>
-            You need to create an account or sign in to chat with sellers and like items.
+            You need to sign in with your PESU Academy account to chat with sellers and like items.
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-3 pt-4">
           <Button 
             onClick={() => {
               onOpenChange(false);
-              router.push('/auth/signup');
+              router.push('/auth/login?redirectTo=/item-listing');
             }}
             className="w-full"
           >
-            Create Account
-          </Button>
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              onOpenChange(false);
-              router.push('/auth/login');
-            }}
-            className="w-full"
-          >
-            Sign In
+            Sign In with PESU Account
           </Button>
           <Button 
             variant="ghost" 
@@ -327,7 +300,7 @@ function ItemCard({
   onAuthRequired 
 }: { 
   item: Item; 
-  currentUser: CurrentUser | null;
+  currentUser: AuthUser | null;
   onAuthRequired: () => void;
 }) {
   const [isLiked, setIsLiked] = useState(false);

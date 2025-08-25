@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { LoginForm } from "@/components/login-form";
+import { LoginForm } from "@/components/pesu-login-form";
 
 function LoginFormWrapper() {
   return (
