@@ -45,6 +45,24 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 });
     }
 
+    // Determine if userId is UUID or SRN and get the actual user ID
+    let actualUserId = userId;
+    
+    // If userId is an SRN, find the UUID by SRN
+    if (!uuidRegex.test(userId)) {
+      const { data: userBySrn, error: srnError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('srn', userId)
+        .single();
+      
+      if (srnError || !userBySrn) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+      
+      actualUserId = userBySrn.id;
+    }
+
     // Note: Authorization is currently handled by the frontend.
     // In a production environment, you should implement proper session-based
     // authentication to verify the user can update this profile.
@@ -73,7 +91,7 @@ export async function PUT(req: NextRequest) {
     const { data: existingProfile, error: checkError } = await supabase
       .from('user_profiles')
       .select('id, bio, phone')
-      .eq('id', userId)
+      .eq('id', actualUserId)
       .single();
 
     if (checkError || !existingProfile) {
@@ -100,7 +118,7 @@ export async function PUT(req: NextRequest) {
         phone: sanitizedPhone,
         updated_at: new Date().toISOString()
       })
-      .eq('id', userId)
+      .eq('id', actualUserId)
       .select('id, name, srn, bio, phone, rating, verified, location')
       .single();
 

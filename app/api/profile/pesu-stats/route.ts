@@ -35,24 +35,37 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 });
   }
 
-  // Check cache first
-  const cacheKey = `profile-stats-${userId}`;
-  const cached = profileStatsCache.get(cacheKey);
-  if (cached && Date.now() < cached.expiry) {
-    return NextResponse.json(cached.data);
-  }
-
   try {
-    // Note: This API currently works without Supabase authentication
-    // as it uses custom PESU authentication. User access is controlled
-    // by the frontend authentication state.
-    // TODO: Implement proper session-based authentication if needed
+    // Determine if userId is UUID or SRN and get the actual user ID
+    let actualUserId = userId;
+    
+    // If userId is an SRN, find the UUID by SRN
+    if (!uuidRegex.test(userId)) {
+      const { data: userBySrn, error: srnError } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('srn', userId)
+        .single();
+      
+      if (srnError || !userBySrn) {
+        return NextResponse.json({ error: "User not found" }, { status: 404 });
+      }
+      
+      actualUserId = userBySrn.id;
+    }
+
+    // Check cache first (using actual UUID for consistency)
+    const cacheKey = `profile-stats-${actualUserId}`;
+    const cached = profileStatsCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) {
+      return NextResponse.json(cached.data);
+    }
 
     // Get user profile with optimized query
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('id, name, srn, bio, phone, rating, verified, location, created_at')
-      .eq('id', userId)
+      .eq('id', actualUserId)
       .single();
 
     if (profileError || !profile) {
@@ -76,7 +89,7 @@ export async function GET(req: NextRequest) {
           name
         )
       `)
-      .eq('seller_id', userId)
+      .eq('seller_id', actualUserId)
       .order('created_at', { ascending: false });
 
     if (itemsError) {
@@ -154,7 +167,7 @@ export async function GET(req: NextRequest) {
       }
     };
 
-    // Cache the response
+    // Cache the response using the actual UUID for consistency
     profileStatsCache.set(cacheKey, {
       data: responseData,
       expiry: Date.now() + CACHE_TTL
