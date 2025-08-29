@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,10 @@ type Message = {
   message: string;
   created_at?: string;
 };
+
+// Message cache to reduce API calls
+const messageCache = new Map<string, { messages: Message[]; timestamp: number }>();
+const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
 
 const supabase = createClient();
 
@@ -26,41 +30,103 @@ export function Chat({
   const [isSending, setIsSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const fetchMessages = useCallback(async () => {
-    const res = await fetch(
-      `/api/messages?user1=${currentUserId}&user2=${otherUserId}`
-    );
-    const data = await res.json();
-    setMessages(Array.isArray(data) ? data : []);
+  // Memoize conversation key for consistent caching
+  const conversationKey = useMemo(() => {
+    const [user1, user2] = [currentUserId, otherUserId].sort();
+    return `${user1}-${user2}`;
   }, [currentUserId, otherUserId]);
+
+  const fetchMessages = useCallback(async () => {
+    try {
+      // Check cache first
+      const cached = messageCache.get(conversationKey);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        setMessages(cached.messages);
+        return;
+      }
+
+      const res = await fetch(
+        `/api/messages?user1=${currentUserId}&user2=${otherUserId}`,
+        {
+          headers: {
+            'Cache-Control': 'no-cache',
+          }
+        }
+      );
+
+      if (!res.ok) {
+        throw new Error(`Failed to fetch messages: ${res.status}`);
+      }
+
+      const data = await res.json();
+      const messageList = Array.isArray(data) ? data : [];
+      
+      setMessages(messageList);
+      
+      // Update cache
+      messageCache.set(conversationKey, {
+        messages: messageList,
+        timestamp: Date.now()
+      });
+      
+    } catch (error) {
+      console.error('Error fetching messages:', error);
+      setMessages([]);
+    }
+  }, [currentUserId, otherUserId, conversationKey]);
+
+  // Memoized message update handler
+  const handleNewMessage = useCallback((newMessage: Message) => {
+    if (
+      (newMessage.sender_id === currentUserId && newMessage.receiver_id === otherUserId) ||
+      (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUserId)
+    ) {
+      setMessages(prevMessages => {
+        // Prevent duplicates
+        const exists = prevMessages.some(msg => msg.id === newMessage.id);
+        if (exists) return prevMessages;
+        
+        const updated = [...prevMessages, newMessage];
+        
+        // Update cache
+        messageCache.set(conversationKey, {
+          messages: updated,
+          timestamp: Date.now()
+        });
+        
+        return updated;
+      });
+    }
+  }, [currentUserId, otherUserId, conversationKey]);
 
   useEffect(() => {
     fetchMessages();
 
+    // Set up real-time subscription
     const channel = supabase
-      .channel("messages")
+      .channel(`messages_${conversationKey}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "messages" },
+        { 
+          event: "INSERT", 
+          schema: "public", 
+          table: "messages",
+          filter: `or(and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId}))`
+        },
         (payload) => {
-          const m = payload.new as Message;
-          if (
-            (m.sender_id === currentUserId && m.receiver_id === otherUserId) ||
-            (m.sender_id === otherUserId && m.receiver_id === currentUserId)
-          ) {
-            setMessages((prevMessages) => [...prevMessages, m]);
-          }
+          handleNewMessage(payload.new as Message);
         }
       )
       .subscribe();
 
-    const interval = setInterval(fetchMessages, 5000);
+    // Reduced polling frequency - rely more on real-time updates
+    const interval = setInterval(fetchMessages, 30000); // 30 seconds instead of 5
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(interval);
     };
-  }, [fetchMessages, currentUserId, otherUserId]);
+  }, [fetchMessages, currentUserId, otherUserId, conversationKey, handleNewMessage]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });

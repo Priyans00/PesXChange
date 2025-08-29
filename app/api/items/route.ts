@@ -1,121 +1,184 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+// Input validation functions
+function validatePagination(limit: string | null, offset: string | null) {
+  const parsedLimit = parseInt(limit || "20");
+  const parsedOffset = parseInt(offset || "0");
+  
+  // Enforce reasonable limits
+  return {
+    limit: Math.min(Math.max(parsedLimit, 1), 100), // Between 1 and 100
+    offset: Math.max(parsedOffset, 0) // Non-negative
+  };
+}
+
+function validatePriceRange(minPrice: string | null, maxPrice: string | null) {
+  const min = minPrice ? parseFloat(minPrice) : null;
+  const max = maxPrice ? parseFloat(maxPrice) : null;
+  
+  if (min !== null && (isNaN(min) || min < 0)) return { min: null, max };
+  if (max !== null && (isNaN(max) || max < 0)) return { min, max: null };
+  if (min !== null && max !== null && min > max) return { min: null, max: null };
+  
+  return { min, max };
+}
+
+function sanitizeSearchTerm(search: string | null): string | null {
+  if (!search) return null;
+  // Remove potentially dangerous characters and limit length
+  return search.replace(/[<>]/g, '').trim().substring(0, 100) || null;
+}
+
+// Cache for category lookup
+const categoryCache = new Map<string, number | null>();
+
 export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { searchParams } = new URL(req.url);
   
-  // Get query parameters
-  const category = searchParams.get("category");
-  const condition = searchParams.get("condition");
-  const minPrice = searchParams.get("minPrice");
-  const maxPrice = searchParams.get("maxPrice");
-  const search = searchParams.get("search");
-  const limit = parseInt(searchParams.get("limit") || "20");
-  const offset = parseInt(searchParams.get("offset") || "0");
-
   try {
-    // First, get items with basic info and category names
+    // Validate and sanitize input parameters
+    const category = searchParams.get("category");
+    const condition = searchParams.get("condition");
+    const { min: minPrice, max: maxPrice } = validatePriceRange(
+      searchParams.get("minPrice"), 
+      searchParams.get("maxPrice")
+    );
+    const search = sanitizeSearchTerm(searchParams.get("search"));
+    const { limit, offset } = validatePagination(
+      searchParams.get("limit"), 
+      searchParams.get("offset")
+    );
+
+    // Build query with performance optimizations
     let query = supabase
       .from("items")
       .select(`
-        *,
-        categories (name)
+        id,
+        title,
+        description,
+        price,
+        condition,
+        location,
+        images,
+        created_at,
+        seller_id,
+        category_id,
+        categories!inner(name)
       `)
       .eq("is_available", true)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
-    // Apply filters
+    // Apply category filter efficiently
     if (category && category !== "All") {
-      // Get category ID
-      const { data: categoryData } = await supabase
-        .from("categories")
-        .select("id")
-        .eq("name", category)
-        .single();
+      // Use cache for category lookup
+      let categoryId = categoryCache.get(category);
+      if (categoryId === undefined) { // Only fetch if not cached
+        const { data: categoryData } = await supabase
+          .from("categories")
+          .select("id")
+          .eq("name", category)
+          .single();
+        
+        if (categoryData?.id) {
+          categoryId = categoryData.id;
+          categoryCache.set(category, categoryId as number);
+        } else {
+          categoryId = null;
+          categoryCache.set(category, null); // Cache null result to avoid repeated lookups
+        }
+      }
       
-      if (categoryData) {
-        query = query.eq("category_id", categoryData.id);
+      if (categoryId) {
+        query = query.eq("category_id", categoryId);
       }
     }
 
+    // Apply other filters
     if (condition && condition !== "All") {
-      query = query.eq("condition", condition);
+      // Validate condition against allowed values
+      const allowedConditions = ["New", "Like New", "Good", "Fair", "Poor"];
+      if (allowedConditions.includes(condition)) {
+        query = query.eq("condition", condition);
+      }
     }
 
-    if (minPrice) {
-      query = query.gte("price", parseFloat(minPrice));
+    if (minPrice !== null) {
+      query = query.gte("price", minPrice);
     }
 
-    if (maxPrice) {
-      query = query.lte("price", parseFloat(maxPrice));
+    if (maxPrice !== null) {
+      query = query.lte("price", maxPrice);
     }
 
     if (search) {
-      query = query.or(`title.ilike.%${search}%,description.ilike.%${search}%`);
+      // Use full-text search for better performance on large datasets
+      query = query.textSearch("title", search, { type: "websearch" });
     }
 
     const { data: items, error } = await query;
 
     if (error) {
       console.error("Error fetching items:", error);
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ error: "Failed to fetch items" }, { status: 500 });
     }
 
     if (!items || items.length === 0) {
       return NextResponse.json([]);
     }
 
-    // Get unique seller IDs
+    // Batch fetch user profiles for better performance
     const sellerIds = [...new Set(items.map(item => item.seller_id))];
-
-    // Fetch user profiles separately
     const { data: userProfiles } = await supabase
       .from("user_profiles")
       .select("id, name, rating, verified")
       .in("id", sellerIds);
 
-    // Create a map of user profiles for quick lookup
-    const userProfileMap = new Map();
-    userProfiles?.forEach(profile => {
-      userProfileMap.set(profile.id, profile);
+    // Create lookup map
+    const userProfileMap = new Map(
+      userProfiles?.map(profile => [profile.id, profile]) || []
+    );
+
+    // Batch fetch likes count
+    const itemIds = items.map(item => item.id);
+    const { data: likesData } = await supabase
+      .from("item_likes")
+      .select("item_id")
+      .in("item_id", itemIds);
+
+    // Count likes per item
+    const likesCountMap = new Map<string, number>();
+    likesData?.forEach(like => {
+      const current = likesCountMap.get(like.item_id) || 0;
+      likesCountMap.set(like.item_id, current + 1);
     });
 
-    // Get likes count for each item
-    const itemsWithDetails = await Promise.all(
-      items.map(async (item) => {
-        // Get likes count
-        const { count } = await supabase
-          .from("item_likes")
-          .select("*", { count: "exact", head: true })
-          .eq("item_id", item.id);
+    // Combine data efficiently
+    const itemsWithDetails = items.map(item => {
+      const userProfile = userProfileMap.get(item.seller_id);
+      const likesCount = likesCountMap.get(item.id) || 0;
 
-        // Get user profile
-        const userProfile = userProfileMap.get(item.seller_id);
-
-        return {
-          id: item.id,
-          title: item.title,
-          description: item.description,
-          price: item.price,
-          location: item.location,
-          year: item.year,
-          condition: item.condition,
-          category: item.categories?.name || "Others", // Get category name from relation
-          images: item.images || [],
-          views: item.views || 0,
-          likes: count || 0,
-          createdAt: item.created_at,
-          seller: {
-            id: item.seller_id,
-            name: userProfile?.name || "Unknown User",
-            rating: userProfile?.rating || 0,
-            verified: userProfile?.verified || false
-          }
-        };
-      })
-    );
+      return {
+        id: item.id,
+        title: item.title,
+        description: item.description,
+        price: item.price,
+        location: item.location,
+        condition: item.condition,
+        category: item.categories[0]?.name || "Others", // Get category name from relation
+        images: item.images || [],
+        likes: likesCount,
+        createdAt: item.created_at,
+        seller: {
+          id: item.seller_id,
+          name: userProfile?.name || "Unknown User",
+          rating: userProfile?.rating || 0,
+          verified: userProfile?.verified || false
+        }
+      };
+    });
 
     return NextResponse.json(itemsWithDetails);
   } catch (error) {

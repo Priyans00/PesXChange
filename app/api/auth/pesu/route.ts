@@ -1,5 +1,28 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// Rate limiting for auth attempts
+const authAttempts = new Map<string, { count: number; lastAttempt: number }>();
+const MAX_AUTH_ATTEMPTS = 5;
+const AUTH_WINDOW = 15 * 60 * 1000; // 15 minutes
+
+function checkAuthRateLimit(identifier: string): boolean {
+  const now = Date.now();
+  const attempts = authAttempts.get(identifier);
+  
+  if (!attempts || now - attempts.lastAttempt > AUTH_WINDOW) {
+    authAttempts.set(identifier, { count: 1, lastAttempt: now });
+    return true;
+  }
+  
+  if (attempts.count >= MAX_AUTH_ATTEMPTS) {
+    return false;
+  }
+  
+  attempts.count++;
+  attempts.lastAttempt = now;
+  return true;
+}
+
 interface PESUAuthRequest {
   username: string;
   password: string;
@@ -26,10 +49,22 @@ interface PESUAuthResponse {
   timestamp: string;
 }
 
+function validateSRN(srn: string): boolean {
+  // Enhanced SRN validation
+  const srnPattern = /^PES\d{1}[A-Z]{2}\d{2}[A-Z]{2}\d{3}$/;
+  return srnPattern.test(srn.toUpperCase());
+}
+
+function sanitizeInput(input: string): string {
+  return input.trim().replace(/[<>]/g, '').substring(0, 100);
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { username, password }: PESUAuthRequest = await request.json();
+    const body = await request.json();
+    const { username, password }: PESUAuthRequest = body;
 
+    // Input validation
     if (!username || !password) {
       return NextResponse.json(
         { error: 'Username and password are required' },
@@ -37,9 +72,34 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(`PESU Auth attempt for user: ${username}`);
+    const sanitizedUsername = sanitizeInput(username);
+    const sanitizedPassword = sanitizeInput(password);
 
-    // Call PESU Auth API
+    if (!validateSRN(sanitizedUsername)) {
+      return NextResponse.json(
+        { error: 'Invalid SRN format' },
+        { status: 400 }
+      );
+    }
+
+    // Rate limiting
+    const clientIP = request.headers.get('x-forwarded-for') || 
+                    request.headers.get('x-real-ip') || 
+                    'unknown';
+    
+    if (!checkAuthRateLimit(`${clientIP}-${sanitizedUsername}`)) {
+      return NextResponse.json(
+        { error: 'Too many authentication attempts. Please try again later.' },
+        { status: 429 }
+      );
+    }
+
+    console.log(`PESU Auth attempt for user: ${sanitizedUsername}`);
+
+    // Call PESU Auth API with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
     const response = await fetch('https://pesu-auth.onrender.com/authenticate', {
       method: 'POST',
       headers: {
@@ -47,12 +107,14 @@ export async function POST(request: NextRequest) {
         'User-Agent': 'PesXChange/1.0',
       },
       body: JSON.stringify({
-        username: username.toUpperCase().trim(),
-        password,
+        username: sanitizedUsername.toUpperCase(),
+        password: sanitizedPassword,
         profile: true,
       }),
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
     console.log(`PESU Auth API response status: ${response.status}`);
 
     if (!response.ok) {
@@ -64,7 +126,21 @@ export async function POST(request: NextRequest) {
     }
 
     const data: PESUAuthResponse = await response.json();
-    console.log(`PESU Auth API response:`, { status: data.status, message: data.message, hasProfile: !!data.profile });
+    
+    // Validate response data
+    if (!data || typeof data.status !== 'boolean') {
+      console.error('Invalid response format from PESU Auth API');
+      return NextResponse.json(
+        { error: 'Invalid authentication response' },
+        { status: 500 }
+      );
+    }
+
+    console.log(`PESU Auth API response:`, { 
+      status: data.status, 
+      message: data.message, 
+      hasProfile: !!data.profile 
+    });
 
     if (!data.status) {
       return NextResponse.json(

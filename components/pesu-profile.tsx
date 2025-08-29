@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -67,6 +67,10 @@ interface ProfileData {
   stats: UserStats;
 }
 
+// Local cache for profile data (5 minutes TTL)
+const profileDataCache = new Map<string, { data: ProfileData; expiry: number }>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 export function ProfileComponent() {
   const { user } = useAuth();
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
@@ -77,20 +81,80 @@ export function ProfileComponent() {
   const [editBio, setEditBio] = useState("");
   const [editPhone, setEditPhone] = useState("");
 
-  // Fetch user profile data and stats
+  // Memoized currency formatter
+  const formatCurrency = useMemo(() => {
+    return (amount: number) => {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR',
+        maximumFractionDigits: 0
+      }).format(amount);
+    };
+  }, []);
+
+  // Memoized image source getter with better error handling
+  const getImageSrc = useCallback((item: Item) => {
+    if (!item.images || !Array.isArray(item.images) || item.images.length === 0) {
+      return null;
+    }
+
+    const firstImage = item.images[0];
+    if (!firstImage || typeof firstImage !== 'string') {
+      return null;
+    }
+
+    // If it's a base64 image or URL
+    if (firstImage.startsWith('data:image/') || firstImage.startsWith('http')) {
+      return firstImage;
+    }
+    
+    return null;
+  }, []);
+
+  // Fetch user profile data and stats with caching
   const fetchProfileData = useCallback(async () => {
     if (!user?.id) return;
+
+    // Check cache first
+    const cacheKey = `profile-${user.id}`;
+    const cached = profileDataCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) {
+      setProfileData(cached.data);
+      setEditBio(cached.data.profile.bio || "");
+      setEditPhone(cached.data.profile.phone || "");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       setIsLoading(true);
       setError(null);
       
-      const response = await fetch(`/api/profile/pesu-stats?userId=${user.id}`);
+      const response = await fetch(`/api/profile/pesu-stats?userId=${user.id}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
+      
       if (!response.ok) {
+        if (response.status === 401) {
+          throw new Error('Please log in again');
+        } else if (response.status === 403) {
+          throw new Error('Access denied');
+        } else if (response.status === 429) {
+          throw new Error('Too many requests. Please wait a moment.');
+        }
         throw new Error('Failed to fetch profile data');
       }
       
       const data: ProfileData = await response.json();
+      
+      // Cache the data
+      profileDataCache.set(cacheKey, {
+        data,
+        expiry: Date.now() + CACHE_TTL
+      });
+      
       setProfileData(data);
       setEditBio(data.profile.bio || "");
       setEditPhone(data.profile.phone || "");
@@ -109,8 +173,24 @@ export function ProfileComponent() {
   const handleUpdateProfile = async () => {
     if (!user?.id) return;
 
+    // Input validation
+    const bioTrimmed = editBio.trim();
+    const phoneTrimmed = editPhone.trim();
+
+    if (bioTrimmed.length > 500) {
+      setError('Bio must be 500 characters or less');
+      return;
+    }
+
+    const phoneRegex = /^[\d\s\-\+\(\)]{10,15}$/;
+    if (phoneTrimmed && !phoneRegex.test(phoneTrimmed)) {
+      setError('Please enter a valid phone number');
+      return;
+    }
+
     try {
       setIsUpdating(true);
+      setError(null);
       
       const response = await fetch('/api/profile/pesu-update', {
         method: 'PUT',
@@ -119,26 +199,42 @@ export function ProfileComponent() {
         },
         body: JSON.stringify({
           userId: user.id,
-          bio: editBio.trim() || null,
-          phone: editPhone.trim() || null,
+          bio: bioTrimmed || null,
+          phone: phoneTrimmed || null,
         }),
       });
 
       if (!response.ok) {
-        throw new Error('Failed to update profile');
+        if (response.status === 401) {
+          throw new Error('Please log in again');
+        } else if (response.status === 403) {
+          throw new Error('Access denied');
+        } else if (response.status === 429) {
+          throw new Error('Too many requests. Please wait a moment.');
+        }
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to update profile');
       }
 
       const result = await response.json();
       
       // Update local state with new profile data
       if (profileData) {
-        setProfileData({
+        const updatedProfileData = {
           ...profileData,
           profile: {
             ...profileData.profile,
             bio: result.profile.bio,
             phone: result.profile.phone,
           }
+        };
+        setProfileData(updatedProfileData);
+        
+        // Update cache
+        const cacheKey = `profile-${user.id}`;
+        profileDataCache.set(cacheKey, {
+          data: updatedProfileData,
+          expiry: Date.now() + CACHE_TTL
         });
       }
       
@@ -149,26 +245,6 @@ export function ProfileComponent() {
     } finally {
       setIsUpdating(false);
     }
-  };
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(amount);
-  };
-
-  const getImageSrc = (item: Item) => {
-    if (item.images && item.images.length > 0 && item.images[0]) {
-      // If it's a base64 image
-      if (item.images[0].startsWith('data:image/')) {
-        return item.images[0];
-      }
-      // If it's a URL
-      return item.images[0];
-    }
-    return null;
   };
 
   if (!user) {
@@ -288,14 +364,23 @@ export function ProfileComponent() {
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
+                      {error && (
+                        <div className="text-red-500 text-sm mb-2">
+                          {error}
+                        </div>
+                      )}
                       <div>
-                        <Label htmlFor="bio">Bio</Label>
+                        <Label htmlFor="bio">Bio (max 500 characters)</Label>
                         <Textarea
                           id="bio"
                           placeholder="Tell others about yourself..."
                           value={editBio}
                           onChange={(e) => setEditBio(e.target.value)}
+                          maxLength={500}
                         />
+                        <div className="text-xs text-muted-foreground mt-1">
+                          {editBio.length}/500 characters
+                        </div>
                       </div>
                       <div>
                         <Label htmlFor="phone">Phone Number</Label>
