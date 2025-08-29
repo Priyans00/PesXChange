@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
-import { Search, MapPin, Star, MessageCircle, Heart, Eye, UserPlus } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Search, MapPin, Star, MessageCircle, Heart, Eye, UserPlus, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import Image from "next/image";
@@ -51,9 +51,14 @@ const priceRanges = [
   "Above ₹10,000"
 ];
 
+// Cache for items data (2 minutes TTL)
+const itemsCache = new Map<string, { data: Item[]; expiry: number }>();
+const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+
 export function ItemListingContents() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedCondition, setSelectedCondition] = useState("All");
@@ -63,15 +68,43 @@ export function ItemListingContents() {
   // Use PESU Auth Context
   const { user: currentUser } = useAuth();
 
+  // Debounced search to reduce API calls
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Generate cache key based on filters
+  const getCacheKey = useCallback(() => {
+    return `items-${debouncedSearchQuery}-${selectedCategory}-${selectedCondition}-${selectedPriceRange}`;
+  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange]);
+
   // Memoize fetchItems to prevent unnecessary re-renders
   const fetchItems = useCallback(async () => {
+    const cacheKey = getCacheKey();
+    
+    // Check cache first
+    const cached = itemsCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiry) {
+      setItems(cached.data);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    setError(null);
+    
     try {
       const params = new URLSearchParams();
       
       if (selectedCategory !== "All") params.append("category", selectedCategory);
       if (selectedCondition !== "All") params.append("condition", selectedCondition);
-      if (searchQuery) params.append("search", searchQuery);
+      if (debouncedSearchQuery) params.append("search", debouncedSearchQuery);
       
       // Handle price range
       if (selectedPriceRange !== "All") {
@@ -97,26 +130,49 @@ export function ItemListingContents() {
         }
       }
 
-      const response = await fetch(`/api/items?${params.toString()}`);
-      const data = await response.json();
+      const response = await fetch(`/api/items?${params.toString()}`, {
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
+      });
       
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to fetch items');
+        if (response.status === 429) {
+          throw new Error('Too many requests. Please wait a moment.');
+        }
+        throw new Error('Failed to fetch items');
       }
+      
+      const data = await response.json();
+      
+      // Cache the results
+      itemsCache.set(cacheKey, {
+        data,
+        expiry: Date.now() + CACHE_TTL
+      });
       
       setItems(data);
     } catch (error) {
       console.error('Error fetching items:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load items');
       setItems([]);
     } finally {
       setLoading(false);
     }
-  }, [searchQuery, selectedCategory, selectedCondition, selectedPriceRange]);
+  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange, getCacheKey]);
 
   // Fetch items when dependencies change
   useEffect(() => {
     fetchItems();
   }, [fetchItems]);
+
+  // Clear filters function
+  const clearFilters = useCallback(() => {
+    setSearchQuery("");
+    setSelectedCategory("All");
+    setSelectedCondition("All");
+    setSelectedPriceRange("All");
+  }, []);
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6">
@@ -185,35 +241,40 @@ export function ItemListingContents() {
       {/* Results Summary */}
       <div className="flex justify-between items-center mb-6">
         <p className="text-gray-600 dark:text-gray-400">
-          Showing {items.length} items
+          {loading ? 'Loading...' : `Showing ${items.length} items`}
         </p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => fetchItems()}>
+          <Button variant="outline" size="sm" onClick={clearFilters}>
+            Clear Filters
+          </Button>
+          <Button variant="outline" size="sm" onClick={fetchItems}>
             Refresh
           </Button>
         </div>
       </div>
 
+      {/* Error State */}
+      {error && (
+        <div className="text-center py-8">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-500 mb-4">{error}</p>
+          <Button onClick={fetchItems} variant="outline">
+            Try Again
+          </Button>
+        </div>
+      )}
+
       {/* Loading State */}
-      {loading && (
+      {loading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {[...Array(8)].map((_, i) => (
-            <div key={i} className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 animate-pulse">
-              <div className="h-48 bg-gray-300 dark:bg-gray-600 rounded-lg mb-4"></div>
-              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
-              <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
-              <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded mb-4"></div>
-              <div className="flex gap-2">
-                <div className="flex-1 h-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
-                <div className="h-8 w-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
-              </div>
-            </div>
+            <ItemCardSkeleton key={i} />
           ))}
         </div>
       )}
 
       {/* Items Grid */}
-      {!loading && (
+      {!loading && !error && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {items.map((item) => (
             <ItemCard 
@@ -227,18 +288,13 @@ export function ItemListingContents() {
       )}
 
       {/* No Results */}
-      {!loading && items.length === 0 && (
+      {!loading && !error && items.length === 0 && (
         <div className="text-center py-12">
           <p className="text-gray-500 dark:text-gray-400 text-lg">No items found matching your criteria</p>
           <Button 
             variant="outline" 
             className="mt-4"
-            onClick={() => {
-              setSearchQuery("");
-              setSelectedCategory("All");
-              setSelectedCondition("All");
-              setSelectedPriceRange("All");
-            }}
+            onClick={clearFilters}
           >
             Clear Filters
           </Button>
@@ -250,6 +306,22 @@ export function ItemListingContents() {
         open={showAuthDialog} 
         onOpenChange={setShowAuthDialog} 
       />
+    </div>
+  );
+}
+
+// Loading skeleton component
+function ItemCardSkeleton() {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 p-4 animate-pulse">
+      <div className="h-48 bg-gray-300 dark:bg-gray-600 rounded-lg mb-4"></div>
+      <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
+      <div className="h-6 bg-gray-300 dark:bg-gray-600 rounded mb-2"></div>
+      <div className="h-4 bg-gray-300 dark:bg-gray-600 rounded mb-4"></div>
+      <div className="flex gap-2">
+        <div className="flex-1 h-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
+        <div className="h-8 w-8 bg-gray-300 dark:bg-gray-600 rounded"></div>
+      </div>
     </div>
   );
 }
@@ -293,7 +365,7 @@ function AuthRequiredDialog({ open, onOpenChange }: { open: boolean; onOpenChang
   );
 }
 
-// Updated Item Card Component
+// Enhanced Item Card Component with better error handling
 function ItemCard({ 
   item, 
   currentUser, 
@@ -305,6 +377,15 @@ function ItemCard({
 }) {
   const [isLiked, setIsLiked] = useState(false);
   const [likesCount, setLikesCount] = useState(item.likes);
+  const [isLikeLoading, setIsLikeLoading] = useState(false);
+
+  // Check if user has liked this item
+  useEffect(() => {
+    if (currentUser) {
+      // You could make an API call here to check if the item is liked
+      // For now, we'll use local state
+    }
+  }, [currentUser, item.id]);
 
   const handleLike = async () => {
     if (!currentUser) {
@@ -312,19 +393,28 @@ function ItemCard({
       return;
     }
 
+    if (isLikeLoading) return;
+
     try {
+      setIsLikeLoading(true);
       const response = await fetch(`/api/items/${item.id}/like`, {
         method: 'POST',
+        headers: {
+          'Cache-Control': 'no-cache',
+        },
       });
       
-      const data = await response.json();
-      
-      if (response.ok) {
-        setIsLiked(data.liked);
-        setLikesCount(prev => data.liked ? prev + 1 : prev - 1);
+      if (!response.ok) {
+        throw new Error('Failed to toggle like');
       }
+      
+      const data = await response.json();
+      setIsLiked(data.liked);
+      setLikesCount(prev => data.liked ? prev + 1 : prev - 1);
     } catch (error) {
       console.error('Error toggling like:', error);
+    } finally {
+      setIsLikeLoading(false);
     }
   };
 
@@ -339,22 +429,42 @@ function ItemCard({
     router.push(`/chat?user=${item?.seller.id}`);
   };
 
+  // Memoized image source getter
+  const getImageSrc = useMemo(() => {
+    if (!item.images || item.images.length === 0) {
+      return "/api/placeholder/300/200";
+    }
+    
+    const firstImage = item.images[0];
+    if (typeof firstImage !== 'string') {
+      return "/api/placeholder/300/200";
+    }
+    
+    return firstImage.startsWith('data:image/') || firstImage.startsWith('http') 
+      ? firstImage 
+      : "/api/placeholder/300/200";
+  }, [item.images]);
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
       {/* Image */}
       <div className="relative">
         <Image
-          src={item.images[0] || "/api/placeholder/300/200"}
+          src={getImageSrc}
           alt={item.title}
           width={300}
           height={200}
           className="w-full h-48 object-cover rounded-t-lg"
+          onError={(e) => {
+            e.currentTarget.src = "/api/placeholder/300/200";
+          }}
         />
         <button
           className={`absolute top-3 right-3 p-2 rounded-full ${
             isLiked ? 'bg-red-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
-          } hover:scale-110 transition-transform shadow-md`}
+          } hover:scale-110 transition-transform shadow-md ${isLikeLoading ? 'opacity-50' : ''}`}
           onClick={handleLike}
+          disabled={isLikeLoading}
         >
           <Heart className="h-4 w-4" fill={isLiked ? 'currentColor' : 'none'} />
         </button>

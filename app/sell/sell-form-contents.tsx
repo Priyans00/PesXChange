@@ -1,7 +1,8 @@
 "use client";
-import { useState } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { User } from "@supabase/supabase-js";
+import DOMPurify from "isomorphic-dompurify";
 import { 
   Upload, 
   X, 
@@ -9,12 +10,12 @@ import {
   MapPin, 
   DollarSign, 
   Calendar, 
-  Package, 
   CheckCircle,
   AlertCircle,
   ArrowRight,
   Star,
-  Shield
+  Shield,
+  FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -43,6 +44,45 @@ const conditions = [
   { value: "Fair", label: "Fair", description: "Shows signs of wear but functional" }
 ];
 
+// Input validation functions
+const validateTitle = (title: string): string | null => {
+  const trimmedTitle = title.trim();
+  if (!trimmedTitle) return "Title is required";
+  if (trimmedTitle.length < 3) return "Title must be at least 3 characters";
+  if (trimmedTitle.length > 100) return "Title must be less than 100 characters";
+  // Check for suspicious patterns
+  if (trimmedTitle.match(/[<>]/)) return "Title contains invalid characters";
+  return null;
+};
+
+const validateDescription = (description: string): string | null => {
+  const trimmedDescription = description.trim();
+  if (!trimmedDescription) return "Description is required";
+  if (trimmedDescription.length < 10) return "Description must be at least 10 characters";
+  if (trimmedDescription.length > 500) return "Description must be less than 500 characters";
+  // Check for suspicious patterns
+  if (trimmedDescription.match(/<script|javascript:|on\w+=/i)) return "Description contains invalid content";
+  return null;
+};
+
+const validatePrice = (price: string): string | null => {
+  if (!price.trim()) return "Price is required";
+  const numPrice = Number(price);
+  if (isNaN(numPrice)) return "Please enter a valid number";
+  if (numPrice <= 0) return "Price must be greater than 0";
+  if (numPrice > 10000000) return "Price seems too high";
+  return null;
+};
+
+const validateYear = (year: string): string | null => {
+  if (!year.trim()) return null; // Optional field
+  const numYear = Number(year);
+  if (isNaN(numYear)) return "Please enter a valid year";
+  const currentYear = new Date().getFullYear();
+  if (numYear < 1900 || numYear > currentYear) return `Year must be between 1900 and ${currentYear}`;
+  return null;
+};
+
 export function SellFormContents({ user }: SellFormContentsProps) {
   // Legacy component - user parameter preserved for compatibility
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -64,56 +104,89 @@ export function SellFormContents({ user }: SellFormContentsProps) {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleInputChange = (field: string, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // Memoized validation functions
+  const validationResults = useMemo(() => ({
+    title: validateTitle(formData.title),
+    description: validateDescription(formData.description),
+    price: validatePrice(formData.price),
+    year: validateYear(formData.year),
+    images: images.length === 0 ? "At least one image is required" : null
+  }), [formData, images]);
+
+  const handleInputChange = useCallback((field: string, value: string) => {
+    // Robust XSS sanitization using isomorphic DOMPurify (works on both server and client)
+    const sanitizedValue = DOMPurify.sanitize(value, { 
+      ALLOWED_TAGS: [],  // Strip all HTML tags
+      ALLOWED_ATTR: []   // Strip all attributes
+    });
+    
+    setFormData(prev => ({ ...prev, [field]: sanitizedValue }));
+    
+    // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: "" }));
     }
-  };
+  }, [errors]);
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_IMAGES = 8;
+
     Array.from(files).forEach(file => {
-      if (file.type.startsWith('image/')) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const result = e.target?.result as string;
-          setImages(prev => [...prev, result]);
-        };
-        reader.readAsDataURL(file);
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        setErrors(prev => ({ ...prev, images: "Only image files are allowed" }));
+        return;
       }
+
+      // Validate file size
+      if (file.size > MAX_FILE_SIZE) {
+        setErrors(prev => ({ ...prev, images: "Images must be less than 10MB" }));
+        return;
+      }
+
+      // Check total image count
+      if (images.length >= MAX_IMAGES) {
+        setErrors(prev => ({ ...prev, images: `Maximum ${MAX_IMAGES} images allowed` }));
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setImages(prev => {
+          if (prev.length >= MAX_IMAGES) return prev;
+          return [...prev, result];
+        });
+        // Clear images error when user adds an image
+        if (errors.images) {
+          setErrors(prev => ({ ...prev, images: "" }));
+        }
+      };
+      reader.readAsDataURL(file);
     });
-  };
+  }, [images.length, errors.images]);
 
-  const removeImage = (index: number) => {
+  const removeImage = useCallback((index: number) => {
     setImages(prev => prev.filter((_, i) => i !== index));
-  };
+  }, []);
 
-  const validateStep = (step: number) => {
+  const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {};
 
     if (step === 1) {
-      if (images.length === 0) {
-        newErrors.images = "At least one image is required";
+      if (validationResults.images) {
+        newErrors.images = validationResults.images;
       }
     } else if (step === 2) {
-      if (!formData.title.trim()) {
-        newErrors.title = "Title is required";
-      }
-      if (!formData.description.trim()) {
-        newErrors.description = "Description is required";
-      }
+      if (validationResults.title) newErrors.title = validationResults.title;
+      if (validationResults.description) newErrors.description = validationResults.description;
     } else if (step === 3) {
-      if (!formData.price.trim()) {
-        newErrors.price = "Price is required";
-      } else if (isNaN(Number(formData.price)) || Number(formData.price) <= 0) {
-        newErrors.price = "Please enter a valid price";
-      }
-      if (formData.year && (isNaN(Number(formData.year)) || Number(formData.year) < 1900 || Number(formData.year) > new Date().getFullYear())) {
-        newErrors.year = "Please enter a valid year";
-      }
+      if (validationResults.price) newErrors.price = validationResults.price;
+      if (validationResults.year) newErrors.year = validationResults.year;
     }
 
     setErrors(newErrors);
@@ -128,25 +201,34 @@ export function SellFormContents({ user }: SellFormContentsProps) {
 
   const prevStep = () => {
     setCurrentStep(prev => prev - 1);
+    setErrors({}); // Clear errors when going back
   };
 
   const handleSubmit = async () => {
     if (!validateStep(3)) return;
 
     setLoading(true);
+    setErrors({});
 
     try {
+      const payload = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        price: Number(formData.price),
+        category: formData.category,
+        condition: formData.condition,
+        year: formData.year.trim() ? Number(formData.year) : null,
+        location: formData.location.trim(),
+        images: images
+      };
+
       const response = await fetch("/api/items", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
         },
-        body: JSON.stringify({
-          ...formData,
-          price: Number(formData.price),
-          year: formData.year ? Number(formData.year) : null,
-          images: images
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -155,8 +237,14 @@ export function SellFormContents({ user }: SellFormContentsProps) {
           router.push("/item-listing?success=true");
         }, 2000);
       } else {
-        const data = await response.json();
-        setErrors({ submit: data.error || "Failed to create item" });
+        const data = await response.json().catch(() => ({}));
+        if (response.status === 401) {
+          setErrors({ submit: "Please log in again to continue" });
+        } else if (response.status === 429) {
+          setErrors({ submit: "Too many requests. Please wait a moment." });
+        } else {
+          setErrors({ submit: data.error || "Failed to create item" });
+        }
       }
     } catch (error) {
       console.error("Error creating item:", error);
@@ -253,7 +341,7 @@ export function SellFormContents({ user }: SellFormContentsProps) {
                     or drag and drop images here
                   </div>
                   <div className="text-sm text-gray-500 dark:text-gray-500 mt-2">
-                    JPG, PNG up to 10MB each
+                    JPG, PNG up to 10MB each (max 8 images)
                   </div>
                 </label>
               </div>
@@ -296,7 +384,7 @@ export function SellFormContents({ user }: SellFormContentsProps) {
 
               {errors.images && (
                 <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                  <div className="flex items-center">
+                  <div className="flex items-center justify-center">
                     <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mr-2" />
                     <p className="text-sm text-red-600 dark:text-red-400">{errors.images}</p>
                   </div>
@@ -304,11 +392,7 @@ export function SellFormContents({ user }: SellFormContentsProps) {
               )}
 
               <div className="flex justify-end mt-8">
-                <Button 
-                  onClick={nextStep} 
-                  disabled={images.length === 0}
-                  className="px-8 py-3 text-lg"
-                >
+                <Button onClick={nextStep} className="px-8 py-3 text-lg" disabled={images.length === 0}>
                   Continue
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -316,21 +400,50 @@ export function SellFormContents({ user }: SellFormContentsProps) {
             </div>
           )}
 
-          {/* Step 2: Item Details */}
+          {/* Step 2: Details */}
           {currentStep === 2 && (
             <div className="p-8">
               <div className="text-center mb-8">
-                <Package className="h-12 w-12 text-blue-600 mx-auto mb-4" />
+                <FileText className="h-12 w-12 text-blue-600 mx-auto mb-4" />
                 <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-                  Tell Us About Your Item
+                  Item Details
                 </h2>
                 <p className="text-gray-600 dark:text-gray-400">
-                  Provide detailed information to attract more buyers
+                  Provide accurate details to attract the right buyers.
                 </p>
               </div>
 
-              <div className="space-y-6">
-                {/* Category Selection */}
+              <div className="max-w-2xl mx-auto space-y-6">
+                {/* Title */}
+                <div>
+                  <Label htmlFor="title" className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 block">
+                    Title *
+                  </Label>
+                  <Input
+                    id="title"
+                    type="text"
+                    placeholder="iPhone 13 Pro - Excellent Condition"
+                    value={formData.title}
+                    onChange={(e) => handleInputChange("title", e.target.value)}
+                    className={`text-lg py-3 ${errors.title ? "border-red-500" : ""}`}
+                    maxLength={100}
+                  />
+                  <div className="flex justify-between items-center mt-1">
+                    {errors.title ? (
+                      <p className="text-sm text-red-600 dark:text-red-400 flex items-center">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.title}
+                      </p>
+                    ) : (
+                      <span></span>
+                    )}
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formData.title.length}/100 characters
+                    </p>
+                  </div>
+                </div>
+
+                {/* Category */}
                 <div>
                   <Label className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 block">
                     Category
@@ -341,40 +454,17 @@ export function SellFormContents({ user }: SellFormContentsProps) {
                         key={category.value}
                         type="button"
                         onClick={() => handleInputChange("category", category.value)}
-                        className={`p-4 rounded-xl border-2 text-center transition-all hover:scale-105 ${
+                        className={`p-4 rounded-xl border-2 text-center transition-all ${
                           formData.category === category.value
                             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
+                            : 'border-gray-200 dark:border-gray-600 hover:border-gray-300'
                         }`}
                       >
                         <div className="text-2xl mb-2">{category.icon}</div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {category.label}
-                        </div>
+                        <div className="text-sm font-medium">{category.label}</div>
                       </button>
                     ))}
                   </div>
-                </div>
-
-                {/* Title */}
-                <div>
-                  <Label htmlFor="title" className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 block">
-                    Item Title *
-                  </Label>
-                  <Input
-                    id="title"
-                    type="text"
-                    placeholder="e.g., iPhone 13 Pro Max - 256GB, Space Gray"
-                    value={formData.title}
-                    onChange={(e) => handleInputChange("title", e.target.value)}
-                    className={`text-lg py-3 ${errors.title ? "border-red-500" : ""}`}
-                  />
-                  {errors.title && (
-                    <p className="text-sm text-red-600 dark:text-red-400 mt-1 flex items-center">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      {errors.title}
-                    </p>
-                  )}
                 </div>
 
                 {/* Description */}
@@ -384,21 +474,25 @@ export function SellFormContents({ user }: SellFormContentsProps) {
                   </Label>
                   <Textarea
                     id="description"
-                    placeholder="Describe your item&apos;s condition, features, accessories included, reason for selling, etc. Be honest and detailed to build trust with buyers."
-                    rows={6}
+                    placeholder="Describe your item's condition, features, and any included accessories..."
                     value={formData.description}
                     onChange={(e) => handleInputChange("description", e.target.value)}
-                    className={`text-base ${errors.description ? "border-red-500" : ""}`}
+                    className={`min-h-[120px] text-base ${errors.description ? "border-red-500" : ""}`}
+                    maxLength={500}
                   />
-                  {errors.description && (
-                    <p className="text-sm text-red-600 dark:text-red-400 mt-1 flex items-center">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      {errors.description}
+                  <div className="flex justify-between items-center mt-1">
+                    {errors.description ? (
+                      <p className="text-sm text-red-600 dark:text-red-400 flex items-center">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {errors.description}
+                      </p>
+                    ) : (
+                      <span></span>
+                    )}
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {formData.description.length}/500 characters
                     </p>
-                  )}
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    {formData.description.length}/500 characters
-                  </p>
+                  </div>
                 </div>
 
                 {/* Condition */}
@@ -485,6 +579,8 @@ export function SellFormContents({ user }: SellFormContentsProps) {
                       value={formData.price}
                       onChange={(e) => handleInputChange("price", e.target.value)}
                       className={`text-2xl py-4 pl-8 text-center font-bold ${errors.price ? "border-red-500" : ""}`}
+                      min="1"
+                      max="10000000"
                     />
                   </div>
                   {errors.price && (
