@@ -8,18 +8,11 @@ function addSecurityHeaders(response: NextResponse) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   
-  // Content Security Policy - Stricter without unsafe directives
-  response.headers.set('Content-Security-Policy', 
-    "default-src 'self'; " +
-    "script-src 'self' 'nonce-nextjs' 'nonce-vercel'; " + // Use nonces instead of unsafe-inline
-    "style-src 'self' 'unsafe-inline'; " + // Keep for CSS-in-JS support in React
-    "img-src 'self' data: https:; " +
-    "font-src 'self' data:; " +
-    "connect-src 'self' https://pesu-auth.onrender.com https://*.supabase.co; " +
-    "frame-ancestors 'none'; " +
-    "object-src 'none'; " +
-    "base-uri 'self';"
-  );
+  // Security Headers (CSP is now handled in next.config.ts to avoid conflicts)
+  response.headers.set('X-Frame-Options', 'DENY');
+  response.headers.set('X-Content-Type-Options', 'nosniff');
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.headers.set('X-XSS-Protection', '1; mode=block');
   
   return response;
 }
