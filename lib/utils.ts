@@ -28,14 +28,26 @@ export function validateSRN(srn: string): { isValid: boolean; error?: string } {
   return { isValid: true };
 }
 
-// Input Sanitization Utility
+// Input Sanitization Utility - Server-Safe
 export function sanitizeInput(input: string): string {
   if (typeof input !== 'string') return '';
   
-  // Remove potential XSS patterns
+  // Remove potential XSS patterns - server-safe
   return input
     .trim()
     .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<[^>]*>/g, '') // Remove all HTML tags
     .replace(/javascript:/gi, '')
     .replace(/on\w+=/gi, '');
+}
+
+// PostgREST Query Sanitization
+export function sanitizeSearchQuery(query: string): string {
+  if (typeof query !== 'string') return '';
+  
+  // Allow only alphanumeric characters, spaces, and basic punctuation
+  return query
+    .replace(/[^\w\s\-\.]/g, '')
+    .trim()
+    .slice(0, 100); // Limit length
 }

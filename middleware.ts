@@ -8,15 +8,17 @@ function addSecurityHeaders(response: NextResponse) {
   response.headers.set('X-XSS-Protection', '1; mode=block');
   response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   
-  // Content Security Policy
+  // Content Security Policy - Stricter without unsafe directives
   response.headers.set('Content-Security-Policy', 
     "default-src 'self'; " +
-    "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
-    "style-src 'self' 'unsafe-inline'; " +
+    "script-src 'self' 'nonce-nextjs' 'nonce-vercel'; " + // Use nonces instead of unsafe-inline
+    "style-src 'self' 'unsafe-inline'; " + // Keep for CSS-in-JS support in React
     "img-src 'self' data: https:; " +
     "font-src 'self' data:; " +
     "connect-src 'self' https://pesu-auth.onrender.com https://*.supabase.co; " +
-    "frame-ancestors 'none';"
+    "frame-ancestors 'none'; " +
+    "object-src 'none'; " +
+    "base-uri 'self';"
   );
   
   return response;
@@ -27,18 +29,17 @@ const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
 const API_RATE_LIMIT = 100; // requests per minute
 const API_RATE_WINDOW = 60 * 1000; // 1 minute
 
-// Periodic cleanup of stale rate limit entries in middleware
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, data] of rateLimitMap.entries()) {
-    if (now - data.lastReset > API_RATE_WINDOW) {
-      rateLimitMap.delete(ip);
-    }
-  }
-}, 60 * 1000); // Run cleanup every minute
-
+// Lazy cleanup of stale rate limit entries during rate limit checks
 function checkApiRateLimit(ip: string): boolean {
   const now = Date.now();
+  
+  // Cleanup stale entries
+  for (const [entryIp, data] of rateLimitMap.entries()) {
+    if (now - data.lastReset > API_RATE_WINDOW) {
+      rateLimitMap.delete(entryIp);
+    }
+  }
+  
   const userLimit = rateLimitMap.get(ip);
   
   if (!userLimit || now - userLimit.lastReset > API_RATE_WINDOW) {

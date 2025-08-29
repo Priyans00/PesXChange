@@ -114,10 +114,17 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
-      // Use full-text search on both title and description fields
-      query = query.or(
-        `title.textSearch.${search}.websearch,description.textSearch.${search}.websearch`
-      );
+      // Sanitize search input to prevent PostgREST injection
+      const sanitizedSearch = search
+        .replace(/[^\w\s]/g, '') // Remove special characters except word chars and spaces
+        .trim();
+      
+      if (sanitizedSearch) {
+        // Use full-text search on both title and description fields
+        query = query.or(
+          `title.textSearch.${sanitizedSearch}.websearch,description.textSearch.${sanitizedSearch}.websearch`
+        );
+      }
     }
 
     const { data: items, error } = await query;

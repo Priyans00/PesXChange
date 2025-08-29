@@ -1,41 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-// Rate limiting map
-const rateLimitMap = new Map<string, { count: number; reset: number }>();
-const RATE_LIMIT = 30; // requests per window
-const RATE_WINDOW = 2 * 60 * 1000; // 2 minutes
-
-// Periodic cleanup of stale rate limit entries to prevent memory leaks
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, data] of rateLimitMap.entries()) {
-    if (now > data.reset) {
-      rateLimitMap.delete(ip);
-    }
-  }
-}, 60 * 1000); // Run cleanup every minute
+import { profileStatsRateLimiter } from "@/lib/rateLimiter";
 
 // Cache for profile stats (5 minutes TTL)
 const profileStatsCache = new Map<string, { data: unknown; expiry: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function rateLimit(clientIP: string): boolean {
-  const now = Date.now();
-  const clientData = rateLimitMap.get(clientIP);
-
-  if (!clientData || now > clientData.reset) {
-    rateLimitMap.set(clientIP, { count: 1, reset: now + RATE_WINDOW });
-    return true;
-  }
-
-  if (clientData.count >= RATE_LIMIT) {
-    return false;
-  }
-
-  clientData.count++;
-  return true;
-}
 
 export async function GET(req: NextRequest) {
   // Rate limiting
@@ -43,7 +12,7 @@ export async function GET(req: NextRequest) {
                   req.headers.get('x-real-ip') || 
                   'unknown';
   
-  if (!rateLimit(clientIP)) {
+  if (!profileStatsRateLimiter.checkRateLimit(clientIP)) {
     return NextResponse.json(
       { error: "Too many requests. Please try again later." },
       { status: 429 }

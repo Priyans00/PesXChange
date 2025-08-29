@@ -114,11 +114,23 @@ export function SellFormContents({ user }: SellFormContentsProps) {
   }), [formData, images]);
 
   const handleInputChange = useCallback((field: string, value: string) => {
-    // Sanitize input to prevent XSS using DOMPurify
-    const sanitizedValue = DOMPurify.sanitize(value, { 
-      ALLOWED_TAGS: [],  // Strip all HTML tags
-      ALLOWED_ATTR: []   // Strip all attributes
-    });
+    // Client-side XSS sanitization using DOMPurify
+    let sanitizedValue = value;
+    
+    // Check if we're in the browser (not SSR)
+    if (typeof window !== 'undefined') {
+      sanitizedValue = DOMPurify.sanitize(value, { 
+        ALLOWED_TAGS: [],  // Strip all HTML tags
+        ALLOWED_ATTR: []   // Strip all attributes
+      });
+    } else {
+      // Fallback server-side sanitization
+      sanitizedValue = value
+        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+        .replace(/<[^>]*>/g, '')
+        .replace(/javascript:/gi, '')
+        .replace(/on\w+=/gi, '');
+    }
     
     setFormData(prev => ({ ...prev, [field]: sanitizedValue }));
     
