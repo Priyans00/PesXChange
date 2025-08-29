@@ -67,9 +67,41 @@ interface ProfileData {
   stats: UserStats;
 }
 
-// Local cache for profile data (5 minutes TTL)
+// Local cache for profile data (5 minutes TTL, max 100 entries)
 const profileDataCache = new Map<string, { data: ProfileData; expiry: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_MAX_ENTRIES = 100;
+
+// Helper to set cache with size limit and cleanup
+function setProfileDataCache(key: string, value: { data: ProfileData; expiry: number }) {
+  // Clean up expired entries
+  for (const [k, v] of profileDataCache) {
+    if (v.expiry < Date.now()) {
+      profileDataCache.delete(k);
+    }
+  }
+  
+  // If cache is full, delete the oldest entry
+  if (profileDataCache.size >= CACHE_MAX_ENTRIES) {
+    const oldestKey = profileDataCache.keys().next().value;
+    if (oldestKey) {
+      profileDataCache.delete(oldestKey);
+    }
+  }
+  
+  profileDataCache.set(key, value);
+}
+
+// Helper to get cache and cleanup expired
+function getProfileDataCache(key: string): { data: ProfileData; expiry: number } | undefined {
+  const entry = profileDataCache.get(key);
+  if (entry && entry.expiry >= Date.now()) {
+    return entry;
+  } else if (entry) {
+    profileDataCache.delete(key);
+  }
+  return undefined;
+}
 
 export function ProfileComponent() {
   const { user } = useAuth();
@@ -117,8 +149,8 @@ export function ProfileComponent() {
 
     // Check cache first
     const cacheKey = `profile-${user.id}`;
-    const cached = profileDataCache.get(cacheKey);
-    if (cached && Date.now() < cached.expiry) {
+    const cached = getProfileDataCache(cacheKey);
+    if (cached) {
       setProfileData(cached.data);
       setEditBio(cached.data.profile.bio || "");
       setEditPhone(cached.data.profile.phone || "");
@@ -150,7 +182,7 @@ export function ProfileComponent() {
       const data: ProfileData = await response.json();
       
       // Cache the data
-      profileDataCache.set(cacheKey, {
+      setProfileDataCache(cacheKey, {
         data,
         expiry: Date.now() + CACHE_TTL
       });
@@ -232,7 +264,7 @@ export function ProfileComponent() {
         
         // Update cache
         const cacheKey = `profile-${user.id}`;
-        profileDataCache.set(cacheKey, {
+        setProfileDataCache(cacheKey, {
           data: updatedProfileData,
           expiry: Date.now() + CACHE_TTL
         });

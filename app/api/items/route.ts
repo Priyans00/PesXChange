@@ -114,8 +114,10 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
-      // Use full-text search for better performance on large datasets
-      query = query.textSearch("title", search, { type: "websearch" });
+      // Use full-text search on both title and description fields
+      query = query.or(
+        `title.textSearch.${search}.websearch,description.textSearch.${search}.websearch`
+      );
     }
 
     const { data: items, error } = await query;

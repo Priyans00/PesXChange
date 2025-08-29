@@ -27,6 +27,16 @@ const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
 const API_RATE_LIMIT = 100; // requests per minute
 const API_RATE_WINDOW = 60 * 1000; // 1 minute
 
+// Periodic cleanup of stale rate limit entries in middleware
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of rateLimitMap.entries()) {
+    if (now - data.lastReset > API_RATE_WINDOW) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, 60 * 1000); // Run cleanup every minute
+
 function checkApiRateLimit(ip: string): boolean {
   const now = Date.now();
   const userLimit = rateLimitMap.get(ip);
@@ -69,10 +79,33 @@ export function middleware(request: NextRequest) {
   const userAgent = request.headers.get('user-agent') || '';
   const suspicious = [
     'sqlmap', 'nikto', 'dirb', 'nmap', 'masscan',
-    'wget', 'curl', 'python-requests', 'libwww'
+    'python-requests', 'libwww'
+  ];
+  const suspiciousWithWhitelist = ['wget', 'curl'];
+  
+  // Define trusted IPs (add your trusted IPs or CIDR ranges here)
+  const trustedIPs = [
+    '127.0.0.1',
+    '::1',
+    // Add more trusted IPs or CIDR ranges as needed
   ];
   
+  function isTrustedIP(ip: string): boolean {
+    // Simple exact match; for CIDR support, use a library like ip-cidr or netmask
+    return trustedIPs.includes(ip);
+  }
+  
+  // Block always for highly suspicious user agents
   if (suspicious.some(tool => userAgent.toLowerCase().includes(tool))) {
+    console.warn(`Suspicious user agent blocked: ${userAgent} from ${clientIP}`);
+    return new Response('Forbidden', { status: 403 });
+  }
+  
+  // Block 'curl' and 'wget' user agents only if not from trusted IPs
+  if (
+    suspiciousWithWhitelist.some(tool => userAgent.toLowerCase().includes(tool)) &&
+    !isTrustedIP(clientIP)
+  ) {
     console.warn(`Suspicious user agent blocked: ${userAgent} from ${clientIP}`);
     return new Response('Forbidden', { status: 403 });
   }

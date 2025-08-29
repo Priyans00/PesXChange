@@ -2,6 +2,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { User } from "@supabase/supabase-js";
+import DOMPurify from "dompurify";
 import { 
   Upload, 
   X, 
@@ -113,8 +114,11 @@ export function SellFormContents({ user }: SellFormContentsProps) {
   }), [formData, images]);
 
   const handleInputChange = useCallback((field: string, value: string) => {
-    // Sanitize input to prevent XSS
-    const sanitizedValue = value.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    // Sanitize input to prevent XSS using DOMPurify
+    const sanitizedValue = DOMPurify.sanitize(value, { 
+      ALLOWED_TAGS: [],  // Strip all HTML tags
+      ALLOWED_ATTR: []   // Strip all attributes
+    });
     
     setFormData(prev => ({ ...prev, [field]: sanitizedValue }));
     

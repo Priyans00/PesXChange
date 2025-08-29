@@ -6,6 +6,16 @@ const rateLimitMap = new Map<string, { count: number; reset: number }>();
 const RATE_LIMIT = 30; // requests per window
 const RATE_WINDOW = 2 * 60 * 1000; // 2 minutes
 
+// Periodic cleanup of stale rate limit entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of rateLimitMap.entries()) {
+    if (now > data.reset) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, 60 * 1000); // Run cleanup every minute
+
 // Cache for profile stats (5 minutes TTL)
 const profileStatsCache = new Map<string, { data: unknown; expiry: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes

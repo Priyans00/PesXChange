@@ -6,6 +6,16 @@ const rateLimitMap = new Map<string, { count: number; reset: number }>();
 const RATE_LIMIT = 10; // requests per window
 const RATE_WINDOW = 60 * 1000; // 1 minute
 
+// Periodic cleanup of stale rate limit entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, data] of rateLimitMap.entries()) {
+    if (now > data.reset) {
+      rateLimitMap.delete(ip);
+    }
+  }
+}, 60 * 1000); // Run cleanup every minute
+
 function rateLimit(clientIP: string): boolean {
   const now = Date.now();
   const clientData = rateLimitMap.get(clientIP);

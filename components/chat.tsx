@@ -15,6 +15,40 @@ type Message = {
 // Message cache to reduce API calls
 const messageCache = new Map<string, { messages: Message[]; timestamp: number }>();
 const CACHE_DURATION = 2 * 60 * 1000; // 2 minutes
+const CACHE_MAX_ENTRIES = 50;
+
+// Helper to set cache with size limit and cleanup
+function setMessageCache(key: string, value: { messages: Message[]; timestamp: number }) {
+  // Clean up expired entries
+  const now = Date.now();
+  for (const [k, v] of messageCache) {
+    if (now - v.timestamp > CACHE_DURATION) {
+      messageCache.delete(k);
+    }
+  }
+  
+  // If cache is full, delete the oldest entry
+  if (messageCache.size >= CACHE_MAX_ENTRIES) {
+    const oldestKey = messageCache.keys().next().value;
+    if (oldestKey) {
+      messageCache.delete(oldestKey);
+    }
+  }
+  
+  messageCache.set(key, value);
+}
+
+// Helper to get cache and cleanup expired
+function getMessageCache(key: string): { messages: Message[]; timestamp: number } | undefined {
+  const now = Date.now();
+  const entry = messageCache.get(key);
+  if (entry && now - entry.timestamp <= CACHE_DURATION) {
+    return entry;
+  } else if (entry) {
+    messageCache.delete(key);
+  }
+  return undefined;
+}
 
 const supabase = createClient();
 
@@ -39,8 +73,8 @@ export function Chat({
   const fetchMessages = useCallback(async () => {
     try {
       // Check cache first
-      const cached = messageCache.get(conversationKey);
-      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+      const cached = getMessageCache(conversationKey);
+      if (cached) {
         setMessages(cached.messages);
         return;
       }
@@ -64,7 +98,7 @@ export function Chat({
       setMessages(messageList);
       
       // Update cache
-      messageCache.set(conversationKey, {
+      setMessageCache(conversationKey, {
         messages: messageList,
         timestamp: Date.now()
       });
@@ -89,7 +123,7 @@ export function Chat({
         const updated = [...prevMessages, newMessage];
         
         // Update cache
-        messageCache.set(conversationKey, {
+        setMessageCache(conversationKey, {
           messages: updated,
           timestamp: Date.now()
         });
