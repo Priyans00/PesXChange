@@ -119,9 +119,9 @@ export async function GET(req: NextRequest) {
       const sanitizedSearch = sanitizeSearchQuery(search);
       
       if (sanitizedSearch) {
-        // Use full-text search on both title and description fields using safer syntax
+        // Use proper PostgREST full-text search syntax
         query = query.or(
-          `title.textSearch.websearch.${sanitizedSearch},description.textSearch.websearch.${sanitizedSearch}`
+          `title.fts.websearch.${sanitizedSearch},description.fts.websearch.${sanitizedSearch}`
         );
       }
     }

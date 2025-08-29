@@ -5,9 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 const chatCache = new Map<string, { data: unknown[]; timestamp: number }>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-function validateUUID(uuid: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(uuid);
+function validateUserID(id: string): boolean {
+  // Accept both UUID format and SRN format (PES2UG24CS453)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const srnRegex = /^PES[0-9]{1}UG[0-9]{2}[A-Z]{2}[0-9]{3}$/;
+  return uuidRegex.test(id) || srnRegex.test(id);
 }
 
 export async function GET(req: NextRequest) {
@@ -26,7 +28,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Missing userId" }, { status: 400 });
   }
 
-  if (!validateUUID(userId)) {
+  if (!validateUserID(userId)) {
     return NextResponse.json({ error: "Invalid userId format" }, { status: 400 });
   }
 

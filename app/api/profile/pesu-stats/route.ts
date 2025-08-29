@@ -28,9 +28,10 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "User ID is required" }, { status: 400 });
   }
 
-  // UUID validation
+  // User ID validation (UUID or SRN format)
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(userId)) {
+  const srnRegex = /^PES[0-9]{1}UG[0-9]{2}[A-Z]{2}[0-9]{3}$/;
+  if (!uuidRegex.test(userId) && !srnRegex.test(userId)) {
     return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 });
   }
 

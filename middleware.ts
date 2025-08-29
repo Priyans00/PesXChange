@@ -2,12 +2,6 @@ import { NextResponse, type NextRequest } from "next/server";
 
 // Security headers
 function addSecurityHeaders(response: NextResponse) {
-  // Prevent XSS attacks
-  response.headers.set('X-Content-Type-Options', 'nosniff');
-  response.headers.set('X-Frame-Options', 'DENY');
-  response.headers.set('X-XSS-Protection', '1; mode=block');
-  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
-  
   // Security Headers (CSP is now handled in next.config.ts to avoid conflicts)
   response.headers.set('X-Frame-Options', 'DENY');
   response.headers.set('X-Content-Type-Options', 'nosniff');

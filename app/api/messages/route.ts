@@ -28,9 +28,11 @@ function sanitizeMessage(message: string): string {
   return message.trim().substring(0, 1000); // Limit message length
 }
 
-function validateUUID(uuid: string): boolean {
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuidRegex.test(uuid);
+function validateUserID(id: string): boolean {
+  // Accept both UUID format and SRN format (PES2UG24CS453)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const srnRegex = /^PES[0-9]{1}UG[0-9]{2}[A-Z]{2}[0-9]{3}$/;
+  return uuidRegex.test(id) || srnRegex.test(id);
 }
 
 // GET: Fetch messages between two users
@@ -56,7 +58,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Validate UUIDs
-  if (!validateUUID(user1) || !validateUUID(user2)) {
+  if (!validateUserID(user1) || !validateUserID(user2)) {
     return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 });
   }
 
@@ -109,7 +111,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Validate UUIDs
-    if (!validateUUID(sender_id) || !validateUUID(receiver_id)) {
+    if (!validateUserID(sender_id) || !validateUserID(receiver_id)) {
       return NextResponse.json({ error: "Invalid user ID format" }, { status: 400 });
     }
 
