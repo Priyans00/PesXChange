@@ -27,11 +27,13 @@ function setMessageCache(key: string, value: { messages: Message[]; timestamp: n
     }
   }
   
-  // If cache is full, delete the oldest entry
-  if (messageCache.size >= CACHE_MAX_ENTRIES) {
+  // If cache is full, delete oldest entries until under limit
+  while (messageCache.size >= CACHE_MAX_ENTRIES) {
     const oldestKey = messageCache.keys().next().value;
     if (oldestKey) {
       messageCache.delete(oldestKey);
+    } else {
+      break;
     }
   }
   

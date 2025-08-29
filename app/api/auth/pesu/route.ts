@@ -96,7 +96,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`PESU Auth attempt for user: ${sanitizedUsername}`);
 
-    // Call PESU Auth API with timeout
+    // Create a fresh AbortController for each request to avoid signal conflicts
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
@@ -114,6 +114,7 @@ export async function POST(request: NextRequest) {
       signal: controller.signal,
     });
 
+    // Clear timeout on successful completion
     clearTimeout(timeoutId);
     console.log(`PESU Auth API response status: ${response.status}`);
 

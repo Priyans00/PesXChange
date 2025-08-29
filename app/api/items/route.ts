@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { sanitizeSearchQuery } from "@/lib/utils";
 
 // Input validation functions
 function validatePagination(limit: string | null, offset: string | null) {
@@ -114,15 +115,13 @@ export async function GET(req: NextRequest) {
     }
 
     if (search) {
-      // Sanitize search input to prevent PostgREST injection
-      const sanitizedSearch = search
-        .replace(/[^\w\s]/g, '') // Remove special characters except word chars and spaces
-        .trim();
+      // Use enhanced sanitization to prevent PostgREST injection
+      const sanitizedSearch = sanitizeSearchQuery(search);
       
       if (sanitizedSearch) {
-        // Use full-text search on both title and description fields
+        // Use full-text search on both title and description fields using safer syntax
         query = query.or(
-          `title.textSearch.${sanitizedSearch}.websearch,description.textSearch.${sanitizedSearch}.websearch`
+          `title.textSearch.websearch.${sanitizedSearch},description.textSearch.websearch.${sanitizedSearch}`
         );
       }
     }

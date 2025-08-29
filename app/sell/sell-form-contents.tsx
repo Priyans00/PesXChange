@@ -2,7 +2,7 @@
 import { useState, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { User } from "@supabase/supabase-js";
-import DOMPurify from "dompurify";
+import DOMPurify from "isomorphic-dompurify";
 import { 
   Upload, 
   X, 
@@ -114,23 +114,11 @@ export function SellFormContents({ user }: SellFormContentsProps) {
   }), [formData, images]);
 
   const handleInputChange = useCallback((field: string, value: string) => {
-    // Client-side XSS sanitization using DOMPurify
-    let sanitizedValue = value;
-    
-    // Check if we're in the browser (not SSR)
-    if (typeof window !== 'undefined') {
-      sanitizedValue = DOMPurify.sanitize(value, { 
-        ALLOWED_TAGS: [],  // Strip all HTML tags
-        ALLOWED_ATTR: []   // Strip all attributes
-      });
-    } else {
-      // Fallback server-side sanitization
-      sanitizedValue = value
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-        .replace(/<[^>]*>/g, '')
-        .replace(/javascript:/gi, '')
-        .replace(/on\w+=/gi, '');
-    }
+    // Robust XSS sanitization using isomorphic DOMPurify (works on both server and client)
+    const sanitizedValue = DOMPurify.sanitize(value, { 
+      ALLOWED_TAGS: [],  // Strip all HTML tags
+      ALLOWED_ATTR: []   // Strip all attributes
+    });
     
     setFormData(prev => ({ ...prev, [field]: sanitizedValue }));
     

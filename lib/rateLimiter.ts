@@ -28,8 +28,10 @@ class RateLimiter {
   }
 
   checkRateLimit(clientIP: string): boolean {
-    // Clean up stale entries first
-    this.cleanupStaleEntries();
+    // Probabilistic cleanup: only clean up 10% of the time to reduce overhead
+    if (Math.random() < 0.1) {
+      this.cleanupStaleEntries();
+    }
     
     const now = Date.now();
     const clientData = this.rateLimitMap.get(clientIP);

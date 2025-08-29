@@ -41,13 +41,15 @@ export function sanitizeInput(input: string): string {
     .replace(/on\w+=/gi, '');
 }
 
-// PostgREST Query Sanitization
+// PostgREST Query Sanitization - Enhanced Security
 export function sanitizeSearchQuery(query: string): string {
   if (typeof query !== 'string') return '';
   
-  // Allow only alphanumeric characters, spaces, and basic punctuation
+  // Comprehensive sanitization for PostgREST query safety
   return query
-    .replace(/[^\w\s\-\.]/g, '')
+    .replace(/[^\w\s\-\.]/g, '') // Only allow alphanumeric, spaces, hyphens, dots
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/\.(and|or|not|eq|neq|gt|gte|lt|lte|like|ilike|is|in|cs|cd|sl|sr|nxl|nxr|adj|ov|fts|plfts|phfts|wfts)\./gi, '') // Remove PostgREST operators
     .trim()
-    .slice(0, 100); // Limit length
+    .slice(0, 50); // Strict length limit
 }

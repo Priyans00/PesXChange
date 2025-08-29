@@ -81,19 +81,11 @@ function setProfileDataCache(key: string, value: { data: ProfileData; expiry: nu
     }
   }
   
-  // If cache is full, delete the oldest entry based on expiry time
+  // If cache is full, delete the oldest entry (FIFO) using Map insertion order
   if (profileDataCache.size >= CACHE_MAX_ENTRIES) {
-    // Find the key with the earliest expiry (oldest entry)
-    let oldestKey: string | undefined;
-    let oldestExpiry = Infinity;
-    for (const [k, v] of profileDataCache) {
-      if (v.expiry < oldestExpiry) {
-        oldestExpiry = v.expiry;
-        oldestKey = k;
-      }
-    }
-    if (oldestKey !== undefined) {
-      profileDataCache.delete(oldestKey);
+    const firstKey = profileDataCache.keys().next().value;
+    if (firstKey !== undefined) {
+      profileDataCache.delete(firstKey);
     }
   }
   
