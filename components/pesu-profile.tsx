@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
+import { getDisplayName, getDisplayInitials } from "@/lib/utils";
 import Image from "next/image";
 
 interface UserStats {
@@ -57,6 +58,7 @@ interface ProfileData {
     id: string;
     name: string;
     srn: string;
+    nickname: string | null;
     bio: string | null;
     phone: string | null;
     rating: number;
@@ -112,6 +114,7 @@ export function ProfileComponent() {
   const [isUpdating, setIsUpdating] = useState(false);
   const [editBio, setEditBio] = useState("");
   const [editPhone, setEditPhone] = useState("");
+  const [editNickname, setEditNickname] = useState("");
 
   // Memoized currency formatter
   const formatCurrency = useMemo(() => {
@@ -154,6 +157,7 @@ export function ProfileComponent() {
       setProfileData(cached.data);
       setEditBio(cached.data.profile.bio || "");
       setEditPhone(cached.data.profile.phone || "");
+      setEditNickname(cached.data.profile.nickname || "");
       setIsLoading(false);
       return;
     }
@@ -190,6 +194,7 @@ export function ProfileComponent() {
       setProfileData(data);
       setEditBio(data.profile.bio || "");
       setEditPhone(data.profile.phone || "");
+      setEditNickname(data.profile.nickname || "");
     } catch (error) {
       console.error('Error fetching profile data:', error);
       setError(error instanceof Error ? error.message : 'Failed to load profile');
@@ -208,6 +213,7 @@ export function ProfileComponent() {
     // Input validation
     const bioTrimmed = editBio.trim();
     const phoneTrimmed = editPhone.trim();
+    const nicknameTrimmed = editNickname.trim();
 
     if (bioTrimmed.length > 500) {
       setError('Bio must be 500 characters or less');
@@ -217,6 +223,20 @@ export function ProfileComponent() {
     const phoneRegex = /^[\d\s\-\+\(\)]{10,15}$/;
     if (phoneTrimmed && !phoneRegex.test(phoneTrimmed)) {
       setError('Please enter a valid phone number');
+      return;
+    }
+
+    if (nicknameTrimmed && (nicknameTrimmed.length < 2 || nicknameTrimmed.length > 50)) {
+      setError('Nickname must be between 2 and 50 characters');
+      return;
+    }
+
+    // Check for potentially inappropriate content in nickname
+    const inappropriateWords = ['admin', 'moderator', 'official', 'pesu', 'university'];
+    if (nicknameTrimmed && inappropriateWords.some(word => 
+      nicknameTrimmed.toLowerCase().includes(word.toLowerCase())
+    )) {
+      setError('Please choose a different nickname');
       return;
     }
 
@@ -233,6 +253,7 @@ export function ProfileComponent() {
           userId: user.id,
           bio: bioTrimmed || null,
           phone: phoneTrimmed || null,
+          nickname: nicknameTrimmed || null,
         }),
       });
 
@@ -258,6 +279,7 @@ export function ProfileComponent() {
             ...profileData.profile,
             bio: result.profile.bio,
             phone: result.profile.phone,
+            nickname: result.profile.nickname,
           }
         };
         setProfileData(updatedProfileData);
@@ -324,11 +346,18 @@ export function ProfileComponent() {
             <CardHeader className="text-center">
               <div className="mx-auto mb-4">
                 <div className="w-24 h-24 rounded-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-3xl font-bold">
-                  {profileData.profile.name.charAt(0).toUpperCase()}
+                  {getDisplayInitials(profileData.profile)}
                 </div>
               </div>
               <CardTitle className="flex items-center justify-center gap-2">
-                {profileData.profile.name}
+                <div className="flex flex-col items-center">
+                  <span>{getDisplayName(profileData.profile)}</span>
+                  {profileData.profile.nickname && (
+                    <span className="text-sm text-muted-foreground font-normal">
+                      ({profileData.profile.name})
+                    </span>
+                  )}
+                </div>
                 <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100">
                   Verified PESU Student
                 </Badge>
@@ -392,7 +421,7 @@ export function ProfileComponent() {
                     <DialogHeader>
                       <DialogTitle>Edit Profile</DialogTitle>
                       <DialogDescription>
-                        Update your bio and contact information
+                        Update your display name, bio and contact information. Use a nickname for enhanced privacy.
                       </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
@@ -401,6 +430,19 @@ export function ProfileComponent() {
                           {error}
                         </div>
                       )}
+                      <div>
+                        <Label htmlFor="nickname">Display Name (Nickname)</Label>
+                        <Input
+                          id="nickname"
+                          placeholder="Enter a nickname for privacy (optional)"
+                          value={editNickname}
+                          onChange={(e) => setEditNickname(e.target.value)}
+                          maxLength={50}
+                        />
+                        <div className="text-xs text-muted-foreground mt-1">
+                          This will be shown instead of your real name. Leave empty to use your real name.
+                        </div>
+                      </div>
                       <div>
                         <Label htmlFor="bio">Bio (max 500 characters)</Label>
                         <Textarea

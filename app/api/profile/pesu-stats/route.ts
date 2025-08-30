@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
     // Get user profile with optimized query
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
-      .select('id, name, srn, bio, phone, rating, verified, location, created_at')
+      .select('id, name, srn, nickname, bio, phone, rating, verified, location, created_at')
       .eq('id', actualUserId)
       .single();
 
