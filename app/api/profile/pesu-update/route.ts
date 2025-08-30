@@ -31,7 +31,7 @@ export async function PUT(req: NextRequest) {
     // TODO: Implement proper session-based authentication if needed
 
     const body = await req.json();
-    const { userId, bio, phone } = body;
+    const { userId, bio, phone, nickname } = body;
 
     // Input validation
     if (!userId) {
@@ -87,10 +87,27 @@ export async function PUT(req: NextRequest) {
       }
     }
 
+    // Validate and sanitize nickname
+    let sanitizedNickname: string | null = null;
+    if (nickname && typeof nickname === 'string') {
+      sanitizedNickname = sanitizeInput(nickname);
+      if (sanitizedNickname.length < 2 || sanitizedNickname.length > 50) {
+        return NextResponse.json({ error: "Nickname must be between 2 and 50 characters" }, { status: 400 });
+      }
+      
+      // Check for potentially inappropriate content
+      const inappropriateWords = ['admin', 'moderator', 'official', 'pesu', 'university'];
+      if (inappropriateWords.some(word => 
+        sanitizedNickname!.toLowerCase().includes(word.toLowerCase())
+      )) {
+        return NextResponse.json({ error: "Please choose a different nickname" }, { status: 400 });
+      }
+    }
+
     // Verify user exists and get current profile
     const { data: existingProfile, error: checkError } = await supabase
       .from('user_profiles')
-      .select('id, bio, phone')
+      .select('id, bio, phone, nickname')
       .eq('id', actualUserId)
       .single();
 
@@ -100,7 +117,8 @@ export async function PUT(req: NextRequest) {
 
     // Check if there are actually changes to make
     const hasChanges = existingProfile.bio !== sanitizedBio || 
-                      existingProfile.phone !== sanitizedPhone;
+                      existingProfile.phone !== sanitizedPhone ||
+                      existingProfile.nickname !== sanitizedNickname;
     
     if (!hasChanges) {
       return NextResponse.json({
@@ -116,10 +134,11 @@ export async function PUT(req: NextRequest) {
       .update({
         bio: sanitizedBio,
         phone: sanitizedPhone,
+        nickname: sanitizedNickname,
         updated_at: new Date().toISOString()
       })
       .eq('id', actualUserId)
-      .select('id, name, srn, bio, phone, rating, verified, location')
+      .select('id, name, srn, bio, phone, nickname, rating, verified, location')
       .single();
 
     if (error) {

@@ -53,3 +53,31 @@ export function sanitizeSearchQuery(query: string): string {
     .trim()
     .slice(0, 50); // Strict length limit
 }
+
+/**
+ * Get the display name for a user, prioritizing nickname over real name
+ * @param user User object with name and optional nickname
+ * @param showRealName Whether to show real name in parentheses when nickname is used
+ * @returns Display name string
+ */
+export function getDisplayName(
+  user: { name: string; nickname?: string | null }, 
+  showRealName: boolean = false
+): string {
+  const displayName = user.nickname || user.name;
+  
+  if (user.nickname && showRealName) {
+    return `${user.nickname} (${user.name})`;
+  }
+  
+  return displayName;
+}
+
+/**
+ * Get the initials for a user's avatar, using nickname if available
+ * @param user User object with name and optional nickname
+ * @returns First letter of display name, uppercase
+ */
+export function getDisplayInitials(user: { name: string; nickname?: string | null }): string {
+  return (user.nickname || user.name).charAt(0).toUpperCase();
+}

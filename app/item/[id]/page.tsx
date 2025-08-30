@@ -10,6 +10,7 @@ import { Breadcrumb } from "@/components/ui/breadcrumb";
 import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
+import { getDisplayName, getDisplayInitials } from "@/lib/utils";
 
 interface Item {
   id: string;
@@ -29,6 +30,7 @@ interface Item {
   seller: {
     id: string;
     name: string;
+    nickname?: string;
     rating: number;
     verified: boolean;
     avatar_url?: string;
@@ -413,19 +415,21 @@ export default function ProductDetailsPage() {
                     {item.seller.avatar_url ? (
                       <Image
                         src={item.seller.avatar_url}
-                        alt={item.seller.name}
+                        alt={getDisplayName(item.seller)}
                         width={64}
                         height={64}
                         className="object-cover"
                       />
                     ) : (
-                      <User className="w-8 h-8 text-gray-400" />
+                      <div className="w-full h-full bg-gradient-to-r from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold">
+                        {getDisplayInitials(item.seller)}
+                      </div>
                     )}
                   </div>
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
                       <h3 className="font-semibold text-gray-900 dark:text-gray-100">
-                        {item.seller.name}
+                        {getDisplayName(item.seller, true)}
                       </h3>
                       {item.seller.verified && (
                         <Badge variant="secondary">
@@ -465,7 +469,7 @@ export default function ProductDetailsPage() {
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
-                          <DialogTitle>Contact {item.seller.name}</DialogTitle>
+                          <DialogTitle>Contact {getDisplayName(item.seller)}</DialogTitle>
                           <DialogDescription>
                             Please be respectful when contacting the seller.
                           </DialogDescription>

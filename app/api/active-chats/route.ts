@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
     const otherUserIds = Array.from(conversationMap.keys());
     const { data: users, error: usersError } = await supabase
       .from("user_profiles")
-      .select("id, name, srn")
+      .select("id, name, nickname, srn")
       .in("id", otherUserIds);
 
     if (usersError) {
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
       const conversation = conversationMap.get(user.id);
       return {
         id: user.id,
-        name: user.name || user.srn || 'Unknown User',
+        name: user.nickname || user.name || user.srn || 'Unknown User',
         lastMessage: conversation?.lastMessage?.substring(0, 100), 
         lastMessageTime: conversation?.lastMessageTime
       };

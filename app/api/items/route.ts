@@ -141,7 +141,7 @@ export async function GET(req: NextRequest) {
     const sellerIds = [...new Set(items.map(item => item.seller_id))];
     const { data: userProfiles } = await supabase
       .from("user_profiles")
-      .select("id, name, rating, verified")
+      .select("id, name, nickname, rating, verified")
       .in("id", sellerIds);
 
     // Create lookup map
@@ -181,7 +181,7 @@ export async function GET(req: NextRequest) {
         createdAt: item.created_at,
         seller: {
           id: item.seller_id,
-          name: userProfile?.name || "Unknown User",
+          name: userProfile?.nickname || userProfile?.name || "Unknown User",
           rating: userProfile?.rating || 0,
           verified: userProfile?.verified || false
         }

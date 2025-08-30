@@ -62,11 +62,11 @@ export function ChatPageContent() {
           const supabase = createClient();
           const { data: sellerUser } = await supabase
             .from("user_profiles")
-            .select("id, name")
+            .select("id, name, nickname")
             .eq("id", otherUserId)
             .single();
 
-          const name = sellerUser?.name || "Unknown";
+          const name = sellerUser?.nickname || sellerUser?.name || "Unknown";
           const exists = data.some((u: User) => u.id === otherUserId);
 
           data = exists

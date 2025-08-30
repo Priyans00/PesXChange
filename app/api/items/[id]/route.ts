@@ -30,6 +30,7 @@ export async function GET(
       .select(`
         id,
         name,
+        nickname,
         rating,
         verified,
         avatar_url,
@@ -71,7 +72,7 @@ export async function GET(
       updated_at: item.updated_at,
       seller: {
         id: seller?.id || item.seller_id,
-        name: seller?.name || 'Unknown Seller',
+        name: seller?.nickname || seller?.name || 'Unknown Seller',
         rating: seller?.rating || 0,
         verified: seller?.verified || false,
         avatar_url: seller?.avatar_url,
