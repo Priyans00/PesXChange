@@ -9,9 +9,17 @@ import { User as UserIcon, Mail, Calendar, Star } from 'lucide-react';
 
 interface UserProfile {
   id: string;
-  name: string;
-  email: string;
-  pesu_id?: string;
+  name: string | null;
+  email: string | null;
+  srn: string | null;
+  phone: string | null;
+  bio: string | null;
+  program: string | null;
+  branch: string | null;
+  semester: string | null;
+  rating: number;
+  verified: boolean;
+  location: string | null;
   created_at: string;
 }
 
@@ -57,14 +65,14 @@ export function ProfileComponent() {
         // Fetch stats
         const { data: itemsData } = await supabase
           .from('items')
-          .select('id, status')
+          .select('id, is_available')
           .eq('seller_id', user.id);
 
         const stats: UserStats = {
-          items_sold: itemsData?.filter(item => item.status === 'sold').length || 0,
-          items_bought: 0, // Would need a purchases table
+          items_sold: itemsData?.filter(item => !item.is_available).length || 0,
+          items_bought: 0, // Would need a purchases or transactions table
           total_items: itemsData?.length || 0,
-          rating: 5.0 // Placeholder
+          rating: profileData?.rating || 0
         };
 
         setStats(stats);
@@ -134,8 +142,11 @@ export function ProfileComponent() {
               <CardDescription className="flex items-center space-x-2">
                 <Mail className="h-4 w-4" />
                 <span>{profile?.email}</span>
-                {profile?.pesu_id && (
+                {profile?.srn && (
                   <Badge variant="secondary">PESU Student</Badge>
+                )}
+                {profile?.verified && (
+                  <Badge variant="default">Verified</Badge>
                 )}
               </CardDescription>
             </div>
@@ -183,10 +194,34 @@ export function ProfileComponent() {
                     </span>
                   </div>
                 </div>
-                {profile?.pesu_id && (
+                {profile?.srn && (
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium">PESU ID:</span>
-                    <Badge variant="outline">{profile.pesu_id}</Badge>
+                    <span className="text-sm font-medium">SRN:</span>
+                    <Badge variant="outline">{profile.srn}</Badge>
+                  </div>
+                )}
+                {profile?.program && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Program:</span>
+                    <span className="text-sm">{profile.program}</span>
+                  </div>
+                )}
+                {profile?.branch && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Branch:</span>
+                    <span className="text-sm">{profile.branch}</span>
+                  </div>
+                )}
+                {profile?.semester && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Semester:</span>
+                    <span className="text-sm">{profile.semester}</span>
+                  </div>
+                )}
+                {profile?.location && (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium">Location:</span>
+                    <span className="text-sm">{profile.location}</span>
                   </div>
                 )}
               </div>
