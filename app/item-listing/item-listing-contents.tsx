@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthUser } from "@/lib/pesu-auth";
 import { getDisplayName, getDisplayInitials } from "@/lib/utils";
+const BLUR_DATA_URL = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD//2Q=";
 
 interface Item {
   id: string;
@@ -457,6 +458,10 @@ function ItemCard({
           width={300}
           height={200}
           className="w-full h-48 object-cover rounded-t-lg"
+          loading="lazy"
+          placeholder="blur"
+          blurDataURL={BLUR_DATA_URL}
+          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
           onError={(e) => {
             e.currentTarget.src = "/api/placeholder/300/200";
           }}

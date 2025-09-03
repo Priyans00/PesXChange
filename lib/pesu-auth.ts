@@ -32,8 +32,6 @@ class PESUAuthService {
   private readonly storageKey = 'pesu_auth_user';
 
   async authenticate(username: string, password: string): Promise<AuthUser> {
-    console.log('Starting PESU authentication for:', username);
-    
     const response = await fetch('/api/auth/pesu', {
       method: 'POST',
       headers: {
@@ -45,8 +43,6 @@ class PESUAuthService {
       }),
     });
 
-    console.log('Auth API response status:', response.status);
-
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({ error: 'Authentication failed' }));
       console.error('Auth API error:', errorData);
@@ -54,7 +50,6 @@ class PESUAuthService {
     }
 
     const data = await response.json();
-    console.log('Auth API success:', { hasUser: !!data.user, userName: data.user?.name });
 
     if (!data.user) {
       throw new Error('Invalid response from authentication service');
@@ -64,7 +59,6 @@ class PESUAuthService {
 
     // Store user in localStorage for session persistence
     this.setStoredUser(user);
-    console.log('User stored successfully');
     
     return user;
   }

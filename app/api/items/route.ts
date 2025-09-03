@@ -1,6 +1,39 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { withCache } from "@/lib/simpleCache";
 import { sanitizeSearchQuery } from "@/lib/utils";
+
+// Type definitions
+interface Category {
+  name: string;
+}
+
+interface Item {
+  id: string;
+  title: string;
+  description: string;
+  price: number;
+  location: string;
+  condition: string;
+  seller_id: string;
+  categories: Category[];
+  created_at: string;
+  image_urls?: string[];
+  images?: string[];
+  status?: string;
+}
+
+interface UserProfile {
+  id: string;
+  name: string;
+  nickname: string;
+  rating: number;
+  verified: boolean;
+}
+
+interface ItemLike {
+  item_id: string;
+}
 
 // Input validation functions
 function validatePagination(limit: string | null, offset: string | null) {
@@ -126,7 +159,15 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const { data: items, error } = await query;
+    // Create cache key for this query
+    const cacheKey = `items_${category}_${condition}_${minPrice}_${maxPrice}_${search}_${limit}_${offset}`;
+    
+    // Use cached query for better performance
+    const { data: items, error } = await withCache(
+      cacheKey,
+      async () => query,
+      2 * 60 * 1000 // 2 minutes cache for item listings
+    );
 
     if (error) {
       console.error("Error fetching items:", error);
@@ -137,34 +178,46 @@ export async function GET(req: NextRequest) {
       return NextResponse.json([]);
     }
 
-    // Batch fetch user profiles for better performance
-    const sellerIds = [...new Set(items.map(item => item.seller_id))];
-    const { data: userProfiles } = await supabase
-      .from("user_profiles")
-      .select("id, name, nickname, rating, verified")
-      .in("id", sellerIds);
+    // Batch fetch user profiles for better performance with caching
+    const sellerIds = [...new Set((items as Item[]).map((item: Item) => item.seller_id))];
+    
+    const userProfilesCacheKey = `profiles_${sellerIds.join('_')}`;
+    const { data: userProfiles } = await withCache(
+      userProfilesCacheKey,
+      async () => supabase
+        .from("user_profiles")
+        .select("id, name, nickname, rating, verified")
+        .in("id", sellerIds),
+      5 * 60 * 1000 // 5 minutes cache for user profiles
+    );
 
     // Create lookup map
     const userProfileMap = new Map(
-      userProfiles?.map(profile => [profile.id, profile]) || []
+      (userProfiles as UserProfile[])?.map((profile: UserProfile) => [profile.id, profile]) || []
     );
 
-    // Batch fetch likes count
-    const itemIds = items.map(item => item.id);
-    const { data: likesData } = await supabase
-      .from("item_likes")
-      .select("item_id")
-      .in("item_id", itemIds);
+    // Batch fetch likes count with caching
+    const itemIds = (items as Item[]).map((item: Item) => item.id);
+    
+    const likesCacheKey = `likes_${itemIds.join('_')}`;
+    const { data: likesData } = await withCache(
+      likesCacheKey,
+      async () => supabase
+        .from("item_likes")
+        .select("item_id")
+        .in("item_id", itemIds),
+      1 * 60 * 1000 // 1 minute cache for likes
+    );
 
     // Count likes per item
     const likesCountMap = new Map<string, number>();
-    likesData?.forEach(like => {
+    (likesData as ItemLike[])?.forEach((like: ItemLike) => {
       const current = likesCountMap.get(like.item_id) || 0;
       likesCountMap.set(like.item_id, current + 1);
     });
 
     // Combine data efficiently
-    const itemsWithDetails = items.map(item => {
+    const itemsWithDetails = (items as Item[]).map((item: Item) => {
       const userProfile = userProfileMap.get(item.seller_id);
       const likesCount = likesCountMap.get(item.id) || 0;
 
