@@ -1,5 +1,7 @@
 # PesXChange
 
+A modern marketplace platform for the PESU community - Live at [pesxchange.app](https://pesxchange.app)
+
 ## Installation Guide
 
 1. **Clone the repository:**
@@ -32,8 +34,14 @@
    npm run dev
    ```
 
+   The application will be available at:
+   - **Development**: http://localhost:3000
+   - **Production**: https://pesxchange.app
+
 ---
 
 **Note:**
 - You must have a Supabase project set up and provide valid keys for authentication and storage to work.
-- For Google authentication, ensure you have configured the provider in your Supabase dashboard and set the correct redirect URLs.
+- For Google authentication, ensure you have configured the provider in your Supabase dashboard and set the correct redirect URLs:
+  - Development: `http://localhost:3000/auth/callback`
+  - Production: `https://pesxchange.app/auth/callback`
