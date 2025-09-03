@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
     // Use cached query for better performance
     const { data: items, error } = await withCache(
       cacheKey,
-      async () => await query,
+      async () => query,
       2 * 60 * 1000 // 2 minutes cache for item listings
     );
 
@@ -184,7 +184,7 @@ export async function GET(req: NextRequest) {
     const userProfilesCacheKey = `profiles_${sellerIds.join('_')}`;
     const { data: userProfiles } = await withCache(
       userProfilesCacheKey,
-      async () => await supabase
+      async () => supabase
         .from("user_profiles")
         .select("id, name, nickname, rating, verified")
         .in("id", sellerIds),
@@ -202,7 +202,7 @@ export async function GET(req: NextRequest) {
     const likesCacheKey = `likes_${itemIds.join('_')}`;
     const { data: likesData } = await withCache(
       likesCacheKey,
-      async () => await supabase
+      async () => supabase
         .from("item_likes")
         .select("item_id")
         .in("item_id", itemIds),

@@ -3,6 +3,10 @@
  * Used for fast API response caching with TTL
  */
 
+// Default cache TTL constants
+const DEFAULT_CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const DEFAULT_SET_TTL = 5 * 60 * 1000;   // 5 minutes for manual sets
+
 interface CacheEntry<T = unknown> {
   data: T;
   timestamp: number;
@@ -24,7 +28,7 @@ class SimpleCache {
     return entry.data as T;
   }
   
-  set<T>(key: string, data: T, ttlMs: number = 5 * 60 * 1000): void {
+  set<T>(key: string, data: T, ttlMs: number = DEFAULT_SET_TTL): void {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
@@ -48,7 +52,7 @@ export const apiCache = new SimpleCache();
 export async function withCache<T>(
   cacheKey: string,
   queryFn: () => Promise<T>,
-  ttlMs: number = 2 * 60 * 1000
+  ttlMs: number = DEFAULT_CACHE_TTL
 ): Promise<T> {
   // Try cache first
   const cached = apiCache.get<T>(cacheKey);
