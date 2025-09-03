@@ -1,11 +1,10 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Simple memory cache for API responses
  * Used for fast API response caching with TTL
  */
 
-interface CacheEntry {
-  data: any;
+interface CacheEntry<T = unknown> {
+  data: T;
   timestamp: number;
   ttl: number;
 }
@@ -13,7 +12,7 @@ interface CacheEntry {
 class SimpleCache {
   private cache = new Map<string, CacheEntry>();
   
-  get(key: string): any | null {
+  get<T = unknown>(key: string): T | null {
     const entry = this.cache.get(key);
     if (!entry) return null;
     
@@ -22,10 +21,10 @@ class SimpleCache {
       return null;
     }
     
-    return entry.data;
+    return entry.data as T;
   }
   
-  set(key: string, data: any, ttlMs: number = 5 * 60 * 1000): void {
+  set<T>(key: string, data: T, ttlMs: number = 5 * 60 * 1000): void {
     this.cache.set(key, {
       data,
       timestamp: Date.now(),
@@ -52,7 +51,7 @@ export async function withCache<T>(
   ttlMs: number = 2 * 60 * 1000
 ): Promise<T> {
   // Try cache first
-  const cached = apiCache.get(cacheKey);
+  const cached = apiCache.get<T>(cacheKey);
   if (cached !== null) {
     return cached;
   }

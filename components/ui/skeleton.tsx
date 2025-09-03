@@ -1,5 +1,4 @@
 import React from 'react';
-/* eslint-disable @typescript-eslint/no-unused-vars */
 import { cn } from "@/lib/utils";
 
 interface SkeletonProps extends React.HTMLAttributes<HTMLDivElement> {
@@ -179,7 +178,8 @@ export function ProgressiveSkeleton({
   children, 
   isLoading, 
   delay = 0,
-  stagger = 100 
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  stagger = 100 // TODO: Implement stagger animation in future
 }: {
   children: React.ReactNode;
   isLoading: boolean;
