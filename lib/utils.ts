@@ -81,3 +81,30 @@ export function getDisplayName(
 export function getDisplayInitials(user: { name: string; nickname?: string | null }): string {
   return (user.nickname || user.name).charAt(0).toUpperCase();
 }
+
+/**
+ * Validate nickname for inappropriate content
+ * @param nickname The nickname to validate
+ * @returns Object with validation result and error message if invalid
+ */
+export function validateNickname(nickname: string): { isValid: boolean; error?: string } {
+  const trimmed = nickname.trim();
+  
+  if (!trimmed) {
+    return { isValid: true }; // Empty nickname is allowed
+  }
+  
+  if (trimmed.length < 2 || trimmed.length > 50) {
+    return { isValid: false, error: 'Nickname must be between 2 and 50 characters' };
+  }
+  
+  // Check for potentially inappropriate content
+  const inappropriateWords = ['admin', 'moderator', 'official', 'pesu', 'university', 'support', 'help'];
+  if (inappropriateWords.some(word => 
+    trimmed.toLowerCase().includes(word.toLowerCase())
+  )) {
+    return { isValid: false, error: 'Please choose a different nickname' };
+  }
+  
+  return { isValid: true };
+}

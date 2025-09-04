@@ -1,348 +1,133 @@
--- Enable UUID extension if not already enabled
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
 
--- 1. User Profiles Table (extends auth.users)
-CREATE TABLE user_profiles (
-  id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
-  name TEXT,
-  srn TEXT UNIQUE,
-  rating DECIMAL(3,2) DEFAULT 0.0 CHECK (rating >= 0 AND rating <= 5),
-  verified BOOLEAN DEFAULT FALSE,
-  phone TEXT,
-  bio TEXT,
-  avatar_url TEXT,
-  location TEXT DEFAULT 'PES University, Bangalore',
-  year_of_study INTEGER CHECK (year_of_study >= 1 AND year_of_study <= 4),
-  branch TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.bookmarks (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT bookmarks_pkey PRIMARY KEY (id),
+  CONSTRAINT bookmarks_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user_profiles(id),
+  CONSTRAINT bookmarks_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-
--- 2. Categories Table
-CREATE TABLE categories (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  description TEXT,
-  icon TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.categories (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  name text NOT NULL UNIQUE,
+  description text,
+  icon text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT categories_pkey PRIMARY KEY (id)
 );
-
--- Insert default categories
-INSERT INTO categories (name, description) VALUES
-('Electronics', 'Phones, laptops, gadgets and electronic accessories'),
-('Books', 'Textbooks, novels, reference books and study materials'),
-('Clothing', 'Clothes, shoes, accessories and fashion items'),
-('Furniture', 'Study tables, chairs, beds and room furniture'),
-('Sports', 'Sports equipment, gym gear and fitness accessories'),
-('Vehicles', 'Bikes, cycles and other vehicles'),
-('Others', 'Miscellaneous items not covered in other categories');
-
--- 3. Items Table
-CREATE TABLE items (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  title TEXT NOT NULL,
-  description TEXT,
-  price DECIMAL(10,2) NOT NULL CHECK (price >= 0),
-  location TEXT NOT NULL DEFAULT 'PES University, Bangalore',
-  year INTEGER CHECK (year >= 1900 AND year <= EXTRACT(YEAR FROM NOW())),
-  condition TEXT NOT NULL CHECK (condition IN ('New', 'Like New', 'Good', 'Fair')),
-  category_id UUID REFERENCES categories(id) ON DELETE SET NULL,
-  images TEXT[] DEFAULT '{}',
-  views INTEGER DEFAULT 0,
-  is_available BOOLEAN DEFAULT TRUE,
-  is_featured BOOLEAN DEFAULT FALSE,
-  seller_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.conversations (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user1_id uuid NOT NULL,
+  user2_id uuid NOT NULL,
+  last_message_id uuid,
+  updated_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT conversations_pkey PRIMARY KEY (id),
+  CONSTRAINT conversations_user2_id_fkey FOREIGN KEY (user2_id) REFERENCES public.user_profiles(id),
+  CONSTRAINT conversations_user1_id_fkey FOREIGN KEY (user1_id) REFERENCES public.user_profiles(id),
+  CONSTRAINT conversations_last_message_id_fkey FOREIGN KEY (last_message_id) REFERENCES public.messages(id)
 );
-
--- 4. Item Likes Table
-CREATE TABLE item_likes (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  item_id UUID REFERENCES items(id) ON DELETE CASCADE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(user_id, item_id)
+CREATE TABLE public.item_likes (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT item_likes_pkey PRIMARY KEY (id),
+  CONSTRAINT item_likes_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id),
+  CONSTRAINT item_likes_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user_profiles(id)
 );
-
--- 5. Messages Table (for chat functionality)
-CREATE TABLE messages (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  sender_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  receiver_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  message TEXT NOT NULL,
-  is_read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.item_reports (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  reporter_id uuid NOT NULL,
+  item_id uuid NOT NULL,
+  reason text NOT NULL,
+  description text,
+  status text DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'reviewed'::text, 'resolved'::text, 'dismissed'::text])),
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT item_reports_pkey PRIMARY KEY (id),
+  CONSTRAINT item_reports_reporter_id_fkey FOREIGN KEY (reporter_id) REFERENCES public.user_profiles(id),
+  CONSTRAINT item_reports_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-
--- 6. Conversations Table (to track chat conversations)
-CREATE TABLE conversations (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user1_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  user2_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  last_message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(user1_id, user2_id),
-  CHECK (user1_id < user2_id) -- Ensure consistent ordering
+CREATE TABLE public.items (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  title text NOT NULL,
+  description text,
+  price numeric NOT NULL CHECK (price >= 0::numeric),
+  location text NOT NULL DEFAULT 'PES University, Bangalore'::text,
+  year integer CHECK (year >= 1900 AND year::numeric <= EXTRACT(year FROM now())),
+  condition text NOT NULL CHECK (condition = ANY (ARRAY['New'::text, 'Like New'::text, 'Good'::text, 'Fair'::text, 'Poor'::text])),
+  category_id uuid,
+  images ARRAY DEFAULT '{}'::text[],
+  views integer DEFAULT 0,
+  is_available boolean DEFAULT true,
+  is_featured boolean DEFAULT false,
+  seller_id uuid NOT NULL,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  category text,
+  CONSTRAINT items_pkey PRIMARY KEY (id),
+  CONSTRAINT items_category_id_fkey FOREIGN KEY (category_id) REFERENCES public.categories(id),
+  CONSTRAINT items_seller_id_fkey FOREIGN KEY (seller_id) REFERENCES public.user_profiles(id)
 );
-
--- 7. Reviews Table (for seller ratings)
-CREATE TABLE reviews (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  reviewer_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  reviewee_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  item_id UUID REFERENCES items(id) ON DELETE CASCADE,
-  rating INTEGER CHECK (rating >= 1 AND rating <= 5) NOT NULL,
-  comment TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(reviewer_id, reviewee_id, item_id)
+CREATE TABLE public.messages (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  sender_id uuid NOT NULL,
+  receiver_id uuid NOT NULL,
+  message text NOT NULL,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT messages_pkey PRIMARY KEY (id),
+  CONSTRAINT messages_sender_id_fkey FOREIGN KEY (sender_id) REFERENCES public.user_profiles(id),
+  CONSTRAINT messages_receiver_id_fkey FOREIGN KEY (receiver_id) REFERENCES public.user_profiles(id)
 );
-
--- 8. Bookmarks/Saved Items Table
-CREATE TABLE bookmarks (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  item_id UUID REFERENCES items(id) ON DELETE CASCADE NOT NULL,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  UNIQUE(user_id, item_id)
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  user_id uuid NOT NULL,
+  type text NOT NULL CHECK (type = ANY (ARRAY['message'::text, 'like'::text, 'review'::text, 'item_sold'::text, 'item_expired'::text])),
+  title text NOT NULL,
+  message text NOT NULL,
+  data jsonb,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.user_profiles(id)
 );
-
--- 9. Item Reports Table (for reporting inappropriate content)
-CREATE TABLE item_reports (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  reporter_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  item_id UUID REFERENCES items(id) ON DELETE CASCADE NOT NULL,
-  reason TEXT NOT NULL,
-  description TEXT,
-  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'reviewed', 'resolved', 'dismissed')),
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.reviews (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  reviewer_id uuid NOT NULL,
+  reviewee_id uuid NOT NULL,
+  item_id uuid,
+  rating integer NOT NULL CHECK (rating >= 1 AND rating <= 5),
+  comment text,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT reviews_pkey PRIMARY KEY (id),
+  CONSTRAINT reviews_reviewee_id_fkey FOREIGN KEY (reviewee_id) REFERENCES public.user_profiles(id),
+  CONSTRAINT reviews_reviewer_id_fkey FOREIGN KEY (reviewer_id) REFERENCES public.user_profiles(id),
+  CONSTRAINT reviews_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.items(id)
 );
-
--- 10. Notifications Table
-CREATE TABLE notifications (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('message', 'like', 'review', 'item_sold', 'item_expired')),
-  title TEXT NOT NULL,
-  message TEXT NOT NULL,
-  data JSONB, -- Additional data related to the notification
-  is_read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+CREATE TABLE public.user_profiles (
+  id uuid NOT NULL DEFAULT uuid_generate_v4(),
+  srn text UNIQUE,
+  prn text,
+  name text,
+  email text,
+  phone text,
+  bio text,
+  avatar_url text,
+  program text,
+  branch text,
+  semester text,
+  section text,
+  campus_code integer,
+  campus text,
+  rating numeric DEFAULT 0.0 CHECK (rating >= 0::numeric AND rating <= 5::numeric),
+  verified boolean DEFAULT false,
+  location text DEFAULT 'PES University, Bangalore'::text,
+  created_at timestamp with time zone DEFAULT now(),
+  updated_at timestamp with time zone DEFAULT now(),
+  last_login timestamp with time zone DEFAULT now(),
+  nickname text CHECK (nickname IS NULL OR length(nickname) >= 2 AND length(nickname) <= 50),
+  CONSTRAINT user_profiles_pkey PRIMARY KEY (id)
 );
-
--- Create Indexes for better performance
-CREATE INDEX idx_items_seller_id ON items(seller_id);
-CREATE INDEX idx_items_category_id ON items(category_id);
-CREATE INDEX idx_items_condition ON items(condition);
-CREATE INDEX idx_items_price ON items(price);
-CREATE INDEX idx_items_created_at ON items(created_at DESC);
-CREATE INDEX idx_items_is_available ON items(is_available);
-CREATE INDEX idx_items_location ON items(location);
-
-CREATE INDEX idx_item_likes_user_id ON item_likes(user_id);
-CREATE INDEX idx_item_likes_item_id ON item_likes(item_id);
-
-CREATE INDEX idx_messages_sender_id ON messages(sender_id);
-CREATE INDEX idx_messages_receiver_id ON messages(receiver_id);
-CREATE INDEX idx_messages_created_at ON messages(created_at DESC);
-
-CREATE INDEX idx_conversations_user1_id ON conversations(user1_id);
-CREATE INDEX idx_conversations_user2_id ON conversations(user2_id);
-CREATE INDEX idx_conversations_updated_at ON conversations(updated_at DESC);
-
-CREATE INDEX idx_reviews_reviewee_id ON reviews(reviewee_id);
-CREATE INDEX idx_reviews_item_id ON reviews(item_id);
-
-CREATE INDEX idx_bookmarks_user_id ON bookmarks(user_id);
-CREATE INDEX idx_bookmarks_item_id ON bookmarks(item_id);
-
-CREATE INDEX idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX idx_notifications_is_read ON notifications(is_read);
-CREATE INDEX idx_notifications_created_at ON notifications(created_at DESC);
-
--- Enable Row Level Security (RLS) on all tables
-ALTER TABLE user_profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
-ALTER TABLE items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE item_likes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
-ALTER TABLE reviews ENABLE ROW LEVEL SECURITY;
-ALTER TABLE bookmarks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE item_reports ENABLE ROW LEVEL SECURITY;
-ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
-
--- RLS Policies for user_profiles
-CREATE POLICY "Profiles are viewable by everyone" ON user_profiles
-  FOR SELECT USING (true);
-
-CREATE POLICY "Users can insert their own profile" ON user_profiles
-  FOR INSERT WITH CHECK (auth.uid() = id);
-
-CREATE POLICY "Users can update their own profile" ON user_profiles
-  FOR UPDATE USING (auth.uid() = id);
-
--- RLS Policies for categories
-CREATE POLICY "Categories are viewable by everyone" ON categories
-  FOR SELECT USING (true);
-
--- RLS Policies for items
-CREATE POLICY "Items are viewable by everyone" ON items
-  FOR SELECT USING (true);
-
-CREATE POLICY "Users can insert their own items" ON items
-  FOR INSERT WITH CHECK (auth.uid() = seller_id);
-
-CREATE POLICY "Users can update their own items" ON items
-  FOR UPDATE USING (auth.uid() = seller_id);
-
-CREATE POLICY "Users can delete their own items" ON items
-  FOR DELETE USING (auth.uid() = seller_id);
-
--- RLS Policies for item_likes
-CREATE POLICY "Likes are viewable by everyone" ON item_likes
-  FOR SELECT USING (true);
-
-CREATE POLICY "Users can manage their own likes" ON item_likes
-  FOR ALL USING (auth.uid() = user_id);
-
--- RLS Policies for messages
-CREATE POLICY "Users can view their own messages" ON messages
-  FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-
-CREATE POLICY "Users can send messages" ON messages
-  FOR INSERT WITH CHECK (auth.uid() = sender_id);
-
-CREATE POLICY "Users can update their own messages" ON messages
-  FOR UPDATE USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
-
--- RLS Policies for conversations
-CREATE POLICY "Users can view their own conversations" ON conversations
-  FOR SELECT USING (auth.uid() = user1_id OR auth.uid() = user2_id);
-
-CREATE POLICY "Users can create conversations" ON conversations
-  FOR INSERT WITH CHECK (auth.uid() = user1_id OR auth.uid() = user2_id);
-
-CREATE POLICY "Users can update their own conversations" ON conversations
-  FOR UPDATE USING (auth.uid() = user1_id OR auth.uid() = user2_id);
-
--- RLS Policies for reviews
-CREATE POLICY "Reviews are viewable by everyone" ON reviews
-  FOR SELECT USING (true);
-
-CREATE POLICY "Users can create reviews" ON reviews
-  FOR INSERT WITH CHECK (auth.uid() = reviewer_id);
-
-CREATE POLICY "Users can update their own reviews" ON reviews
-  FOR UPDATE USING (auth.uid() = reviewer_id);
-
--- RLS Policies for bookmarks
-CREATE POLICY "Users can view their own bookmarks" ON bookmarks
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can manage their own bookmarks" ON bookmarks
-  FOR ALL USING (auth.uid() = user_id);
-
--- RLS Policies for item_reports
-CREATE POLICY "Users can view their own reports" ON item_reports
-  FOR SELECT USING (auth.uid() = reporter_id);
-
-CREATE POLICY "Users can create reports" ON item_reports
-  FOR INSERT WITH CHECK (auth.uid() = reporter_id);
-
--- RLS Policies for notifications
-CREATE POLICY "Users can view their own notifications" ON notifications
-  FOR SELECT USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can update their own notifications" ON notifications
-  FOR UPDATE USING (auth.uid() = user_id);
-
--- Functions and Triggers
-
--- Function to automatically create user profile on signup (DISABLED for SRN requirement)
--- We now handle profile creation manually after SRN validation
--- CREATE OR REPLACE FUNCTION public.handle_new_user()
--- RETURNS TRIGGER AS $$
--- BEGIN
---   INSERT INTO public.user_profiles (id, name)
---   VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)));
---   RETURN NEW;
--- END;
--- $$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Trigger to create profile on user signup (DISABLED)
--- CREATE TRIGGER on_auth_user_created
---   AFTER INSERT ON auth.users
---   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
-
--- Function to update user rating based on reviews
-CREATE OR REPLACE FUNCTION update_user_rating()
-RETURNS TRIGGER AS $$
-BEGIN
-  UPDATE user_profiles 
-  SET rating = (
-    SELECT COALESCE(AVG(rating), 0)
-    FROM reviews 
-    WHERE reviewee_id = NEW.reviewee_id
-  )
-  WHERE id = NEW.reviewee_id;
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to update rating when new review is added
-CREATE TRIGGER on_review_created
-  AFTER INSERT ON reviews
-  FOR EACH ROW EXECUTE FUNCTION update_user_rating();
-
--- Function to increment item views
-CREATE OR REPLACE FUNCTION increment_item_views(item_uuid UUID)
-RETURNS VOID AS $$
-BEGIN
-  UPDATE items SET views = views + 1 WHERE id = item_uuid;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to update conversation timestamp
-CREATE OR REPLACE FUNCTION update_conversation_timestamp()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- Ensure user1_id is always the smaller UUID
-  INSERT INTO conversations (user1_id, user2_id, last_message_id, updated_at)
-  VALUES (
-    LEAST(NEW.sender_id, NEW.receiver_id),
-    GREATEST(NEW.sender_id, NEW.receiver_id),
-    NEW.id,
-    NEW.created_at
-  )
-  ON CONFLICT (user1_id, user2_id) 
-  DO UPDATE SET 
-    last_message_id = NEW.id,
-    updated_at = NEW.created_at;
-  
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Trigger to update conversation on new message
-CREATE TRIGGER on_message_created
-  AFTER INSERT ON messages
-  FOR EACH ROW EXECUTE FUNCTION update_conversation_timestamp();
-
--- Function to update updated_at timestamp
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-  NEW.updated_at = NOW();
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
--- Triggers to update updated_at on relevant tables
-CREATE TRIGGER update_user_profiles_updated_at
-  BEFORE UPDATE ON user_profiles
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_items_updated_at
-  BEFORE UPDATE ON items
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
