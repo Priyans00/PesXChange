@@ -123,7 +123,7 @@ CREATE TABLE public.user_profiles (
   campus_code integer,
   campus text,
   rating numeric DEFAULT 0.0 CHECK (rating >= 0::numeric AND rating <= 5::numeric),
-  verified boolean DEFAULT true,
+  verified boolean DEFAULT false,
   location text DEFAULT 'PES University, Bangalore'::text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
