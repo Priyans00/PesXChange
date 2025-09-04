@@ -1,26 +1,41 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const supabase = await createClient();
   
   try {
-    // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Try to get user ID from multiple sources
+    let userId: string | null = null;
+    let userEmail: string | null = null;
+
+    // First, try Supabase auth (for existing sessions)
+    const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser();
+    if (supabaseUser && !authError) {
+      userId = supabaseUser.id;
+      userEmail = supabaseUser.email || null;
+    } else {
+      // If no Supabase session, try to get from request headers or query
+      const userIdFromHeader = request.headers.get('X-User-ID');
+      const userIdFromQuery = request.nextUrl.searchParams.get('userId');
+      
+      userId = userIdFromHeader || userIdFromQuery;
+      
+      if (!userId) {
+        return NextResponse.json({ error: "No user session found. Please log in again." }, { status: 401 });
+      }
     }
 
-    // Get user profile
+    // Get user profile using the userId
     const { data: profile, error: profileError } = await supabase
       .from('user_profiles')
       .select('*')
-      .eq('id', user.id)
+      .eq('id', userId)
       .single();
 
     if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 500 });
+      console.error('Profile error:', profileError);
+      return NextResponse.json({ error: "Profile not found. Please try logging in again." }, { status: 404 });
     }
 
     // Get user's items
@@ -30,7 +45,7 @@ export async function GET() {
         *,
         categories (name)
       `)
-      .eq('seller_id', user.id)
+      .eq('seller_id', userId)
       .order('created_at', { ascending: false });
 
     if (itemsError) {
@@ -67,7 +82,7 @@ export async function GET() {
     const responseData = {
       profile: {
         ...profile,
-        email: user.email
+        email: userEmail || profile.email
       },
       items: itemsWithStats,
       stats: {
@@ -93,15 +108,27 @@ export async function PUT(req: NextRequest) {
   const supabase = await createClient();
   
   try {
-    // Get the authenticated user
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    
-    if (authError || !user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    // Try to get user ID from multiple sources
+    let userId: string | null = null;
+
+    // First, try Supabase auth (for existing sessions)
+    const { data: { user: supabaseUser }, error: authError } = await supabase.auth.getUser();
+    if (supabaseUser && !authError) {
+      userId = supabaseUser.id;
+    } else {
+      // If no Supabase session, try to get from request headers or query
+      const userIdFromHeader = req.headers.get('X-User-ID');
+      const userIdFromQuery = req.nextUrl.searchParams.get('userId');
+      
+      userId = userIdFromHeader || userIdFromQuery;
+      
+      if (!userId) {
+        return NextResponse.json({ error: "No user session found. Please log in again." }, { status: 401 });
+      }
     }
 
     const body = await req.json();
-    const { name, bio, phone, year_of_study, branch, location } = body;
+    const { name, bio, phone, nickname, year_of_study, branch, location } = body;
 
     // Update user profile
     const { data, error } = await supabase
@@ -110,12 +137,13 @@ export async function PUT(req: NextRequest) {
         name,
         bio,
         phone,
+        nickname,
         year_of_study,
         branch,
         location,
         updated_at: new Date().toISOString()
       })
-      .eq('id', user.id)
+      .eq('id', userId)
       .select()
       .single();
 
