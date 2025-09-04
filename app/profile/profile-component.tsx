@@ -30,7 +30,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
-import { getDisplayName, getDisplayInitials } from "@/lib/utils";
+import { getDisplayName, getDisplayInitials, validateNickname } from "@/lib/utils";
 import Image from "next/image";
 
 interface UserStats {
@@ -112,8 +112,8 @@ export function ProfileComponent() {
       if (cached) {
         const parsedCache = JSON.parse(cached);
         const cacheAge = Date.now() - parsedCache.timestamp;
-        // Use cache if less than 5 minutes old
-        if (cacheAge < 5 * 60 * 1000) {
+        // Use cache if less than 2 minutes old (reduced from 5 minutes for security)
+        if (cacheAge < 2 * 60 * 1000) {
           setProfileData(parsedCache.data);
           setEditBio(parsedCache.data.profile.bio || "");
           setEditPhone(parsedCache.data.profile.phone || "");
@@ -181,17 +181,10 @@ export function ProfileComponent() {
       return;
     }
 
-    if (nicknameTrimmed && (nicknameTrimmed.length < 2 || nicknameTrimmed.length > 50)) {
-      setError('Nickname must be between 2 and 50 characters');
-      return;
-    }
-
-    // Check for potentially inappropriate content in nickname
-    const inappropriateWords = ['admin', 'moderator', 'official', 'pesu', 'university'];
-    if (nicknameTrimmed && inappropriateWords.some(word => 
-      nicknameTrimmed.toLowerCase().includes(word.toLowerCase())
-    )) {
-      setError('Please choose a different nickname');
+    // Validate nickname using utility function
+    const nicknameValidation = validateNickname(nicknameTrimmed);
+    if (!nicknameValidation.isValid) {
+      setError(nicknameValidation.error || 'Invalid nickname');
       return;
     }
 

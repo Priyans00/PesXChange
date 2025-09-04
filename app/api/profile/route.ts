@@ -15,15 +15,26 @@ export async function GET(request: NextRequest) {
       userId = supabaseUser.id;
       userEmail = supabaseUser.email || null;
     } else {
-      // If no Supabase session, try to get from request headers or query
+      // For PESU auth users, validate the request more carefully
       const userIdFromHeader = request.headers.get('X-User-ID');
-      const userIdFromQuery = request.nextUrl.searchParams.get('userId');
       
-      userId = userIdFromHeader || userIdFromQuery;
-      
-      if (!userId) {
+      if (!userIdFromHeader) {
         return NextResponse.json({ error: "No user session found. Please log in again." }, { status: 401 });
       }
+      
+      // Additional validation: Check if the user exists in the database
+      // This prevents completely arbitrary user IDs while still allowing PESU auth
+      const { data: userExists } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('id', userIdFromHeader)
+        .single();
+      
+      if (!userExists) {
+        return NextResponse.json({ error: "Invalid user session. Please log in again." }, { status: 401 });
+      }
+      
+      userId = userIdFromHeader;
     }
 
     // Get user profile using the userId
@@ -116,15 +127,26 @@ export async function PUT(req: NextRequest) {
     if (supabaseUser && !authError) {
       userId = supabaseUser.id;
     } else {
-      // If no Supabase session, try to get from request headers or query
+      // For PESU auth users, validate the request more carefully
       const userIdFromHeader = req.headers.get('X-User-ID');
-      const userIdFromQuery = req.nextUrl.searchParams.get('userId');
       
-      userId = userIdFromHeader || userIdFromQuery;
-      
-      if (!userId) {
+      if (!userIdFromHeader) {
         return NextResponse.json({ error: "No user session found. Please log in again." }, { status: 401 });
       }
+      
+      // Additional validation: Check if the user exists in the database
+      // This prevents completely arbitrary user IDs while still allowing PESU auth
+      const { data: userExists } = await supabase
+        .from('user_profiles')
+        .select('id')
+        .eq('id', userIdFromHeader)
+        .single();
+      
+      if (!userExists) {
+        return NextResponse.json({ error: "Invalid user session. Please log in again." }, { status: 401 });
+      }
+      
+      userId = userIdFromHeader;
     }
 
     const body = await req.json();
