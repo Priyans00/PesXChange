@@ -122,10 +122,11 @@ class PESUAuthService {
       ]);
       
       const backendHealthy = backendHealth.status === 'fulfilled' && 
-        (backendHealth.value as any)?.status === 'ok';
+        (backendHealth.value as { status?: string })?.status === 'ok';
       
       const pesuHealthy = pesuHealth.status === 'fulfilled' && 
-        ((pesuHealth.value as any)?.status === 'true' || (pesuHealth.value as any)?.status === true);
+        ((pesuHealth.value as { status?: string | boolean })?.status === 'true' || 
+         (pesuHealth.value as { status?: string | boolean })?.status === true);
       
       return backendHealthy && pesuHealthy;
     } catch {

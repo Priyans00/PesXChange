@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Heart, MessageCircle, Share2, User, MapPin, Calendar, Eye, Star, Package, Shield, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -133,7 +133,7 @@ export default function ProductDetailsPage() {
               .single();
             
             setIsLiked(!!likeData);
-          } catch (error) {
+          } catch {
             // Ignore like check errors
           }
         }
@@ -157,7 +157,7 @@ export default function ProductDetailsPage() {
               }));
             setRelatedItems(mappedRelated);
           }
-        } catch (error) {
+        } catch {
           setRelatedItems([]);
         }
 
@@ -243,7 +243,7 @@ export default function ProductDetailsPage() {
           text: `Check out this ${item?.title} on PesXChange`,
           url: window.location.href,
         });
-      } catch (error) {
+      } catch {
         // Ignore sharing errors
       }
     } else {

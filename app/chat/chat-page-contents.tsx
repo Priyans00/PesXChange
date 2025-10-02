@@ -85,7 +85,7 @@ export function ChatPageContent() {
     };
 
     fetchActiveChats();
-  }, [currentUserId, otherUserId]);
+  }, [currentUserId, otherUserId, authLoading]);
 
   const filteredChats = useMemo(
     () => activeChats.filter((conversation) => conversation.other_user_id !== currentUserId),

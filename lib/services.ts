@@ -12,4 +12,4 @@ export type { UserProfile, UpdateProfileRequest } from './profiles-service';
 export type { PaginatedResponse } from './api-client';
 
 // Constants
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com';

@@ -1,7 +1,7 @@
 // API Configuration for PesXChange Go Fiber Backend
 // This file centralizes all API endpoint configurations and provides a type-safe client
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com';
 
 export const API_ENDPOINTS = {
   // Authentication - Updated to match working Go backend endpoints
@@ -39,14 +39,14 @@ export const API_ENDPOINTS = {
 } as const;
 
 // Response types for type safety
-export interface APIResponse<T = any> {
+export interface APIResponse<T = unknown> {
   success?: boolean;
   data?: T;
   error?: string;
   message?: string;
 }
 
-export interface PaginatedResponse<T = any> extends APIResponse<T[]> {
+export interface PaginatedResponse<T = unknown> extends APIResponse<T[]> {
   pagination: {
     limit: number;
     offset: number;
@@ -94,7 +94,7 @@ export class APIClient {
         if (user?.id) {
           headers['X-User-ID'] = user.id;
         }
-      } catch (e) {
+      } catch {
         // Ignore parsing errors
       }
     }
@@ -156,7 +156,7 @@ export class APIClient {
     return this.request(`${API_ENDPOINTS.PROFILE.GET}/${userId}`);
   }
 
-  async updateProfile(userId: string, updates: Record<string, any>) {
+  async updateProfile(userId: string, updates: Record<string, unknown>) {
     return this.request(`${API_ENDPOINTS.PROFILE.UPDATE}/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
@@ -174,14 +174,14 @@ export class APIClient {
     return this.request(`${API_ENDPOINTS.ITEMS.GET}/${itemId}`);
   }
 
-  async createItem(itemData: Record<string, any>) {
+  async createItem(itemData: Record<string, unknown>) {
     return this.request(API_ENDPOINTS.ITEMS.CREATE, {
       method: 'POST',
       body: JSON.stringify(itemData),
     });
   }
 
-  async updateItem(itemId: string, updates: Record<string, any>) {
+  async updateItem(itemId: string, updates: Record<string, unknown>) {
     return this.request(`${API_ENDPOINTS.ITEMS.UPDATE}/${itemId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),

@@ -66,7 +66,7 @@ export class MessagesService {
     // This would need to be implemented in the backend as a bulk operation
     // For now, we'll make individual API calls or implement this endpoint
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/messages/conversations/${otherUserId}/read`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com'}/api/messages/conversations/${otherUserId}/read`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +88,7 @@ export class MessagesService {
   // Get unread message count
   async getUnreadCount(): Promise<{ count: number }> {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/messages/unread/count`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com'}/api/messages/unread/count`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -110,7 +110,7 @@ export class MessagesService {
   // Delete a message (if supported)
   async deleteMessage(messageId: string): Promise<{ success: boolean; message: string }> {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/messages/${messageId}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com'}/api/messages/${messageId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

@@ -97,7 +97,7 @@ export function ProfileComponent() {
     });
   }, []);
 
-  const fetchProfileData = useCallback(async () => {
+  const fetchProfileData = useCallback(async (): Promise<void> => {
     
     if (!user) {
       setError("Please log in to view your profile.");
@@ -125,13 +125,13 @@ export function ProfileComponent() {
             setEditNickname(cachedData.data.profile.nickname || "");
             return;
           }
-        } catch (e) {
+        } catch {
           // Invalid cache, proceed with API call
         }
       }
 
       // Direct API call to Go backend
-      const apiResponse = await fetch(`http://localhost:8080/api/profile/${user.id}`, {
+      const apiResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com'}/api/profile/${user.id}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -162,10 +162,26 @@ export function ProfileComponent() {
       };
       
       try {
-        const itemsData = await apiClient.getItemsBySeller(user.id, 100, 0) as any;
+        interface ItemsResponse {
+          success: boolean;
+          data: Array<{
+            id: string;
+            title: string;
+            price: number;
+            condition: string;
+            category?: string;
+            images: string[];
+            views?: number;
+            created_at: string;
+            is_available: boolean;
+            [key: string]: unknown;
+          }>;
+        }
+        
+        const itemsData = await apiClient.getItemsBySeller(user.id, 100, 0) as ItemsResponse;
         
         if (itemsData && itemsData.success && itemsData.data) {
-          userItems = itemsData.data.map((item: any) => ({
+          userItems = itemsData.data.map((item): UserItem => ({
             id: item.id,
             title: item.title,
             price: item.price,
@@ -174,8 +190,8 @@ export function ProfileComponent() {
             images: item.images || [],
             views: item.views || 0,
             likes: 0, // Not implemented yet
-            created_at: item.created_at,
-            is_available: item.is_available,
+            created_at: item.created_at || new Date().toISOString(),
+            is_available: item.is_available ?? true,
           }));
           
           // Calculate real statistics
@@ -244,7 +260,7 @@ export function ProfileComponent() {
       setError("Please log in to view your profile.");
       setIsLoading(false);
     }
-  }, [user, authLoading]); // Removed fetchProfileData from dependencies
+  }, [user, authLoading, fetchProfileData]);
 
   const handleUpdateProfile = async () => {
     if (!profileData || !user) return;

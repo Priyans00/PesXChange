@@ -36,6 +36,7 @@ export interface CreateItemRequest {
   condition: 'new' | 'like-new' | 'good' | 'fair' | 'poor';
   image_urls?: string[];
   categories?: string[];
+  [key: string]: unknown; // Allow additional properties
 }
 
 export interface ItemFilters {
@@ -62,7 +63,7 @@ export class ItemsService {
       }
     });
 
-    return apiClient.getItems(params);
+    return apiClient.getItems(params) as Promise<PaginatedResponse<Item>>;
   }
 
   // Get a single item by ID
@@ -72,12 +73,12 @@ export class ItemsService {
 
   // Create a new item
   async createItem(itemData: CreateItemRequest): Promise<{ data: Item }> {
-    return apiClient.createItem(itemData) as Promise<{ data: Item }>;
+    return apiClient.createItem(itemData as Record<string, unknown>) as Promise<{ data: Item }>;
   }
 
   // Update an existing item
   async updateItem(itemId: string, updates: Partial<CreateItemRequest>): Promise<{ data: Item }> {
-    return apiClient.updateItem(itemId, updates) as Promise<{ data: Item }>;
+    return apiClient.updateItem(itemId, updates as Record<string, unknown>) as Promise<{ data: Item }>;
   }
 
   // Delete an item

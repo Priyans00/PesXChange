@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Search, MapPin, Star, MessageCircle, Heart, Eye, UserPlus, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -82,9 +82,8 @@ export function ItemListingContents() {
   // Component cleanup on unmount
   useEffect(() => {
     return () => {
-      // Clear any in-progress requests for this component
-      const cacheKey = getCacheKey();
-      requestsInProgress.delete(cacheKey);
+      // Clear any in-progress requests for this component on unmount
+      requestsInProgress.clear();
     };
   }, []);
   
@@ -102,10 +101,10 @@ export function ItemListingContents() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Generate cache key based on filters - inline to avoid dependency issues
-  const getCacheKey = () => {
+  // Generate cache key based on filters - memoized to prevent dependency issues
+  const getCacheKey = useCallback(() => {
     return `items-${debouncedSearchQuery}-${selectedCategory}-${selectedCondition}-${selectedPriceRange}`;
-  };
+  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange]);
 
   // Memoize fetchItems to prevent unnecessary re-renders
   const fetchItems = useCallback(async () => {
@@ -160,7 +159,7 @@ export function ItemListingContents() {
       }
 
       // Convert URLSearchParams to a filters object
-      const filters: any = {};
+      const filters: Record<string, string | number> = {};
       params.forEach((value, key) => {
         if (key === 'minPrice') filters.min_price = parseInt(value);
         else if (key === 'maxPrice') filters.max_price = parseInt(value);
@@ -211,7 +210,7 @@ export function ItemListingContents() {
       setLoading(false);
       requestsInProgress.delete(cacheKey);
     }
-  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange]);
+  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange, getCacheKey]);
 
   // Fetch items when dependencies change, but wait for auth to finish loading
   useEffect(() => {
@@ -220,7 +219,7 @@ export function ItemListingContents() {
     if (!authLoading) {
       fetchItems();
     }
-  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange, authLoading]);
+  }, [fetchItems, debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange, authLoading]);
 
   // Clear filters function
   const clearFilters = useCallback(() => {

@@ -30,6 +30,7 @@ export interface UpdateProfileRequest {
   phone?: string; // Go backend uses 'phone' instead of 'contact_number'
   email?: string;
   bio?: string;
+  [key: string]: unknown; // Allow additional properties
 }
 
 export class ProfilesService {
@@ -39,7 +40,7 @@ export class ProfilesService {
   }
 
   // Update user profile
-  async updateProfile(userId: string, updates: UpdateProfileRequest): Promise<{ data: UserProfile }> {
+  async updateProfile(userId: string, updates: Record<string, unknown>): Promise<{ data: UserProfile }> {
     return apiClient.updateProfile(userId, updates) as Promise<{ data: UserProfile }>;
   }
 
@@ -72,8 +73,8 @@ export class ProfilesService {
         const user = JSON.parse(storedUser);
         return user.id || null;
       }
-    } catch (error) {
-      console.error('Error parsing stored user:', error);
+    } catch {
+      // Error parsing stored user - continue to fallback methods
     }
 
     // Fallback: Try to get from other storage keys
@@ -88,8 +89,8 @@ export class ProfilesService {
       try {
         const payload = JSON.parse(atob(token.split('.')[1]));
         return payload.sub || payload.user_id || payload.id || null;
-      } catch (error) {
-        console.error('Error parsing JWT token:', error);
+      } catch {
+        // Error parsing JWT token - return null
       }
     }
 
@@ -99,7 +100,7 @@ export class ProfilesService {
   // Search users by name or SRN (if implemented in backend)
   async searchUsers(query: string): Promise<{ data: UserProfile[] }> {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/users/search?q=${encodeURIComponent(query)}`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com'}/api/users/search?q=${encodeURIComponent(query)}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -113,15 +114,14 @@ export class ProfilesService {
       
       return await response.json();
     } catch (error) {
-      console.error('Error searching users:', error);
       throw error;
     }
   }
 
   // Get user rating/reviews (if implemented in backend)
-  async getUserRating(userId: string): Promise<{ rating: number; review_count: number; reviews: any[] }> {
+  async getUserRating(userId: string): Promise<{ rating: number; review_count: number; reviews: unknown[] }> {
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/users/${userId}/rating`, {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com'}/api/users/${userId}/rating`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -135,7 +135,6 @@ export class ProfilesService {
       
       return await response.json();
     } catch (error) {
-      console.error('Error getting user rating:', error);
       throw error;
     }
   }
