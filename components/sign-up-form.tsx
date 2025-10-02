@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { APIClient } from "@/lib/api-client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -49,18 +50,11 @@ export function SignUpForm({
     }
 
     try {
-      const response = await fetch('/api/check-srn', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ srn: srnValue }),
-      });
-
-      const data = await response.json();
+      const apiClient = new APIClient();
+      const data = await apiClient.checkSRN(srnValue) as { exists?: boolean; error?: string; };
 
       if (data.exists) {
-        setSrnError(data.error);
+        setSrnError(data.error || "SRN already exists");
         setIsSrnValid(false);
       } else {
         setSrnError(null);

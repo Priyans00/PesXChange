@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { APIClient } from "@/lib/api-client";
 
 type Message = {
   id: string;
@@ -175,15 +176,8 @@ export function Chat({
     setIsSending(true);
 
     try {
-      await fetch("/api/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sender_id: currentUserId,
-          receiver_id: otherUserId,
-          message: input.trim(),
-        }),
-      });
+      const apiClient = new APIClient();
+      await apiClient.sendDirectMessage(currentUserId, otherUserId, input.trim());
       setInput("");
     } catch (error) {
       console.error("Failed to send message:", error);

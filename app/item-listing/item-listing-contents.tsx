@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { Search, MapPin, Star, MessageCircle, Heart, Eye, UserPlus, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/auth-context";
 import { AuthUser } from "@/lib/pesu-auth";
 import { getDisplayName, getDisplayInitials } from "@/lib/utils";
+import { itemsService } from "@/lib/services";
 const BLUR_DATA_URL = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD//2Q=";
 
 interface Item {
@@ -16,21 +17,28 @@ interface Item {
   title: string;
   price: number;
   location: string;
-  year?: number;
   condition: string;
-  seller: {
+  description: string;
+  seller_id: string;
+  image_urls?: string[] | null;
+  images?: string[];
+  categories?: string[] | null;
+  created_at: string;
+  updated_at: string;
+  status?: string;
+  // Optional fields for compatibility
+  year?: number;
+  seller?: {
     id: string;
     name: string;
     nickname?: string;
     rating: number;
     verified: boolean;
   };
-  images: string[];
-  category: string;
-  views: number;
-  likes: number;
-  description: string;
-  createdAt: string;
+  category?: string;
+  views?: number;
+  likes?: number;
+  createdAt?: string;
 }
 
 const categories = [
@@ -54,13 +62,16 @@ const priceRanges = [
   "Above ₹10,000"
 ];
 
-// Cache for items data (2 minutes TTL)
+// Cache for items data (10 minutes TTL for better performance)
 const itemsCache = new Map<string, { data: Item[]; expiry: number }>();
-const CACHE_TTL = 2 * 60 * 1000; // 2 minutes
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
+
+// Track in-progress requests to prevent duplicates
+const requestsInProgress = new Set<string>();
 
 export function ItemListingContents() {
   const [items, setItems] = useState<Item[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false); // Start with false to prevent blocking
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
@@ -68,8 +79,17 @@ export function ItemListingContents() {
   const [selectedPriceRange, setSelectedPriceRange] = useState("All");
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   
+  // Component cleanup on unmount
+  useEffect(() => {
+    return () => {
+      // Clear any in-progress requests for this component
+      const cacheKey = getCacheKey();
+      requestsInProgress.delete(cacheKey);
+    };
+  }, []);
+  
   // Use PESU Auth Context
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, isLoading: authLoading } = useAuth();
 
   // Debounced search to reduce API calls
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -82,14 +102,19 @@ export function ItemListingContents() {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
-  // Generate cache key based on filters
-  const getCacheKey = useCallback(() => {
+  // Generate cache key based on filters - inline to avoid dependency issues
+  const getCacheKey = () => {
     return `items-${debouncedSearchQuery}-${selectedCategory}-${selectedCondition}-${selectedPriceRange}`;
-  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange]);
+  };
 
   // Memoize fetchItems to prevent unnecessary re-renders
   const fetchItems = useCallback(async () => {
-    const cacheKey = getCacheKey();
+    const cacheKey = getCacheKey();  
+    
+    // Check if request is already in progress globally
+    if (requestsInProgress.has(cacheKey)) {
+      return;
+    }
     
     // Check cache first
     const cached = itemsCache.get(cacheKey);
@@ -98,11 +123,12 @@ export function ItemListingContents() {
       setLoading(false);
       return;
     }
-
-    setLoading(true);
-    setError(null);
     
-    try {
+    // Mark request as in progress
+    requestsInProgress.add(cacheKey);
+    
+    setLoading(true);
+    setError(null);    try {
       const params = new URLSearchParams();
       
       if (selectedCategory !== "All") params.append("category", selectedCategory);
@@ -133,20 +159,43 @@ export function ItemListingContents() {
         }
       }
 
-      const response = await fetch(`/api/items?${params.toString()}`, {
-        headers: {
-          'Cache-Control': 'no-cache',
-        },
+      // Convert URLSearchParams to a filters object
+      const filters: any = {};
+      params.forEach((value, key) => {
+        if (key === 'minPrice') filters.min_price = parseInt(value);
+        else if (key === 'maxPrice') filters.max_price = parseInt(value);
+        else filters[key] = value;
       });
+
+      const response = await itemsService.getItems(filters);
+      const serviceItems = response.data || [];
       
-      if (!response.ok) {
-        if (response.status === 429) {
-          throw new Error('Too many requests. Please wait a moment.');
-        }
-        throw new Error('Failed to fetch items');
-      }
-      
-      const data = await response.json();
+      // Map service items to local Item interface
+      const data = serviceItems.map(serviceItem => ({
+        id: serviceItem.id,
+        title: serviceItem.title,
+        price: serviceItem.price,
+        location: serviceItem.location,
+        condition: serviceItem.condition,
+        seller_id: serviceItem.seller_id || serviceItem.seller?.id || '',
+        created_at: serviceItem.created_at,
+        updated_at: serviceItem.updated_at || serviceItem.created_at,
+        seller: {
+          id: serviceItem.seller?.id || serviceItem.seller_id,
+          name: serviceItem.seller?.name || 'Unknown',
+          nickname: serviceItem.seller?.nickname,
+          rating: serviceItem.seller?.rating || 0,
+          verified: serviceItem.seller?.verified || false,
+        },
+        categories: serviceItem.categories || [],
+        image_urls: serviceItem.image_urls || serviceItem.images || [],
+        images: serviceItem.image_urls || serviceItem.images || [],
+        category: serviceItem.categories?.[0] || 'Others',
+        views: 0, // Would need to be implemented in backend
+        likes: 0, // Would need to be implemented in backend
+        description: serviceItem.description,
+        createdAt: serviceItem.created_at,
+      }));
       
       // Cache the results
       itemsCache.set(cacheKey, {
@@ -156,18 +205,22 @@ export function ItemListingContents() {
       
       setItems(data);
     } catch (error) {
-      console.error('Error fetching items:', error);
       setError(error instanceof Error ? error.message : 'Failed to load items');
       setItems([]);
     } finally {
       setLoading(false);
+      requestsInProgress.delete(cacheKey);
     }
-  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange, getCacheKey]);
+  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange]);
 
-  // Fetch items when dependencies change
+  // Fetch items when dependencies change, but wait for auth to finish loading
   useEffect(() => {
-    fetchItems();
-  }, [fetchItems]);
+    // Wait for auth context to finish loading before fetching items
+    // This prevents race conditions during navigation
+    if (!authLoading) {
+      fetchItems();
+    }
+  }, [debouncedSearchQuery, selectedCategory, selectedCondition, selectedPriceRange, authLoading]);
 
   // Clear filters function
   const clearFilters = useCallback(() => {
@@ -202,6 +255,7 @@ export function ItemListingContents() {
                 className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                suppressHydrationWarning={true}
               />
             </div>
           </div>
@@ -400,20 +454,27 @@ function ItemCard({
 
     try {
       setIsLikeLoading(true);
-      const response = await fetch(`/api/items/${item.id}/like`, {
-        method: 'POST',
-        headers: {
-          'Cache-Control': 'no-cache',
-        },
-      });
       
-      if (!response.ok) {
-        throw new Error('Failed to toggle like');
+      // Use direct Supabase calls for now since like functionality isn't in Go backend yet
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      
+      if (isLiked) {
+        // Remove like
+        await supabase
+          .from('item_likes')
+          .delete()
+          .eq('user_id', currentUser.id)
+          .eq('item_id', item.id);
+      } else {
+        // Add like
+        await supabase
+          .from('item_likes')
+          .insert({ user_id: currentUser.id, item_id: item.id });
       }
-      
-      const data = await response.json();
-      setIsLiked(data.liked);
-      setLikesCount(prev => data.liked ? prev + 1 : prev - 1);
+
+      setIsLiked(!isLiked);
+      setLikesCount(prev => isLiked ? (prev || 0) - 1 : (prev || 0) + 1);
     } catch (error) {
       console.error('Error toggling like:', error);
     } finally {
@@ -429,43 +490,71 @@ function ItemCard({
       return;
     }
     // Navigate to chat if user is authenticated
-    router.push(`/chat?user=${item?.seller.id}`);
+    router.push(`/chat?user=${item?.seller?.id}`);
   };
 
   // Memoized image source getter
   const getImageSrc = useMemo(() => {
-    if (!item.images || item.images.length === 0) {
-      return "/api/placeholder/300/200";
+    // Check both image_urls (from API) and images (legacy/frontend format)
+    const imageArray = item.image_urls || item.images;
+    if (!imageArray || imageArray.length === 0) {
+      return null;
     }
     
-    const firstImage = item.images[0];
+    const firstImage = imageArray[0];
     if (typeof firstImage !== 'string') {
-      return "/api/placeholder/300/200";
+      return null;
     }
     
     return firstImage.startsWith('data:image/') || firstImage.startsWith('http') 
       ? firstImage 
-      : "/api/placeholder/300/200";
-  }, [item.images]);
+      : null;
+  }, [item.image_urls, item.images]);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border dark:border-gray-700 hover:shadow-md transition-shadow duration-200">
       {/* Image */}
       <div className="relative">
-        <Image
-          src={getImageSrc}
-          alt={item.title}
-          width={300}
-          height={200}
-          className="w-full h-48 object-cover rounded-t-lg"
-          loading="lazy"
-          placeholder="blur"
-          blurDataURL={BLUR_DATA_URL}
-          sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-          onError={(e) => {
-            e.currentTarget.src = "/api/placeholder/300/200";
-          }}
-        />
+        {getImageSrc ? (
+          <Image
+            src={getImageSrc}
+            alt={item.title}
+            width={300}
+            height={200}
+            className="w-full h-48 object-cover rounded-t-lg"
+            loading="lazy"
+            placeholder="blur"
+            blurDataURL={BLUR_DATA_URL}
+            sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
+            onError={(e) => {
+              // Hide the broken image and show placeholder instead
+              e.currentTarget.style.display = 'none';
+              const placeholder = e.currentTarget.parentElement?.querySelector('.image-placeholder');
+              if (placeholder) {
+                (placeholder as HTMLElement).style.display = 'flex';
+              }
+            }}
+          />
+        ) : (
+          <div className="w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 rounded-t-lg flex items-center justify-center">
+            <div className="text-center text-gray-500 dark:text-gray-400">
+              <svg className="mx-auto h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <p className="text-sm font-medium">No Image</p>
+            </div>
+          </div>
+        )}
+        
+        {/* Fallback placeholder for broken images */}
+        <div className="image-placeholder w-full h-48 bg-gradient-to-br from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-800 rounded-t-lg items-center justify-center hidden">
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            <svg className="mx-auto h-12 w-12 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+            <p className="text-sm font-medium">Image Error</p>
+          </div>
+        </div>
         <button
           className={`absolute top-3 right-3 p-2 rounded-full ${
             isLiked ? 'bg-red-500 text-white' : 'bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300'
@@ -522,14 +611,14 @@ function ItemCard({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center">
             <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">
-              {getDisplayInitials(item.seller)}
+              {item.seller && getDisplayInitials(item.seller)}
             </div>
             <div className="ml-2">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{getDisplayName(item.seller)}</p>
+              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{item.seller && getDisplayName(item.seller)}</p>
               <div className="flex items-center">
                 <Star className="h-3 w-3 text-yellow-400 fill-current" />
-                <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">{item.seller.rating}</span>
-                {item.seller.verified && (
+                <span className="text-xs text-gray-500 dark:text-gray-400 ml-1">{item.seller?.rating}</span>
+                {item.seller?.verified && (
                   <span className="text-xs text-green-600 dark:text-green-400 ml-1">✓</span>
                 )}
               </div>

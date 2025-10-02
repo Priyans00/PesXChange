@@ -18,6 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
 import { useAuth } from "@/contexts/auth-context";
+import { APIClient } from "@/lib/api-client";
 
 const categories = [
   { value: "Electronics", label: "Electronics", icon: "📱" },
@@ -86,8 +87,22 @@ export function SellFormContents() {
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.title.trim()) newErrors.title = "Title is required";
-    if (!formData.description.trim()) newErrors.description = "Description is required";
+    if (!formData.title.trim()) {
+      newErrors.title = "Title is required";
+    } else if (formData.title.trim().length < 3) {
+      newErrors.title = "Title must be at least 3 characters long";
+    } else if (formData.title.trim().length > 100) {
+      newErrors.title = "Title must be less than 100 characters";
+    }
+    
+    if (!formData.description.trim()) {
+      newErrors.description = "Description is required";
+    } else if (formData.description.trim().length < 10) {
+      newErrors.description = "Description must be at least 10 characters long";
+    } else if (formData.description.trim().length > 1000) {
+      newErrors.description = "Description must be less than 1000 characters";
+    }
+    
     if (!formData.category) newErrors.category = "Category is required";
     if (!formData.condition) newErrors.condition = "Condition is required";
     
@@ -160,21 +175,9 @@ export function SellFormContents() {
         views: 0,
       };
 
-      // Submit to the items API
-      const response = await fetch('/api/items', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(itemData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create item');
-      }
-
-      await response.json();
+      // Submit to the items API using the API client
+      const apiClient = new APIClient();
+      await apiClient.createItem(itemData);
       
       router.push("/item-listing?success=true");
     } catch (error) {
