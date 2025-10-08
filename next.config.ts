@@ -9,6 +9,16 @@ const nextConfig: NextConfig = {
   images: {
     formats: ['image/webp', 'image/avif'],
     minimumCacheTTL: 60,
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'via.placeholder.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'iyrabfyteoyaaoctbvfh.supabase.co',
+      },
+    ],
   },
 
   // Minimal experimental optimizations

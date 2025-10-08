@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useState } from 'react';
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft, Heart, MessageCircle, Share2, User, MapPin, Calendar, Eye, Star, Package, Shield, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,10 @@ import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 import { getDisplayName, getDisplayInitials } from "@/lib/utils";
+import { itemsService } from "@/lib/services";
+
+// Global request tracking to prevent duplicate API calls
+const itemRequestsInProgress = new Set<string>();
 
 interface Item {
   id: string;
@@ -52,7 +56,7 @@ interface RelatedItem {
 export default function ProductDetailsPage() {
   const params = useParams();
   const router = useRouter();
-  const { user, isLoggedIn } = useAuth(); // Use PESU Auth
+  const { user, isLoggedIn, isLoading: authLoading } = useAuth(); // Use PESU Auth
   const [item, setItem] = useState<Item | null>(null);
   const [relatedItems, setRelatedItems] = useState<RelatedItem[]>([]);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -60,21 +64,61 @@ export default function ProductDetailsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showContactInfo, setShowContactInfo] = useState(false);
-
+  
   useEffect(() => {
     const fetchItemDetails = async () => {
+      const itemId = params.id as string;
+      
+      // Wait for auth to finish loading before making API calls
+      if (authLoading) {
+        return;
+      }
+      
+      // Prevent multiple simultaneous requests using global tracking
+      if (itemRequestsInProgress.has(itemId)) {
+        return;
+      }
+      
+      itemRequestsInProgress.add(itemId);
+      
       try {
         // Fetch item details
-        const response = await fetch(`/api/items/${params.id}`);
-        if (!response.ok) {
-          throw new Error('Item not found');
-        }
+        const response = await itemsService.getItem(params.id as string);
+        const itemData = response.data;
         
-        const itemData = await response.json();
-        setItem(itemData);
+        // Map the response to match the expected Item interface
+        const mappedItem: Item = {
+          id: itemData.id,
+          title: itemData.title,
+          description: itemData.description,
+          price: itemData.price,
+          location: itemData.location,
+          condition: itemData.condition,
+          category: itemData.categories?.[0] || 'Other', // Use first category
+          images: itemData.image_urls || itemData.images || [],
+          views: 0, // This would need to be implemented in backend
+          likes: 0, // This would need to be implemented in backend
+          is_available: itemData.status !== 'sold',
+          created_at: itemData.created_at,
+          updated_at: itemData.updated_at,
+          seller: {
+            id: itemData.seller?.id || itemData.seller_id,
+            name: itemData.seller?.name || 'Unknown',
+            nickname: itemData.seller?.nickname,
+            rating: itemData.seller?.rating || 0,
+            verified: itemData.seller?.verified || false,
+            avatar_url: undefined,
+            bio: undefined,
+            phone: undefined,
+            location: itemData.location,
+            created_at: itemData.created_at,
+          }
+        };
+        
+        setItem(mappedItem);
 
-        // Increment view count
-        await fetch(`/api/items/${params.id}/view`, { method: 'POST' });
+        // Note: View count increment would need to be implemented in the Go backend
+        // For now, we'll skip this feature or implement it as a separate API call
 
         // Check if user has liked this item (only if logged in with PESU Auth)
         if (user?.id) {
@@ -89,29 +133,31 @@ export default function ProductDetailsPage() {
               .single();
             
             setIsLiked(!!likeData);
-          } catch (error) {
+          } catch {
             // Ignore like check errors
-            console.error('Error checking like status:', error);
           }
         }
 
         // Fetch related items from the same category
         try {
-          const { createClient } = await import("@/lib/supabase/client");
-          const supabase = createClient();
-          const { data: related } = await supabase
-            .from('items')
-            .select(`
-              id, title, price, images, condition
-            `)
-            .eq('category_id', itemData.category_id)
-            .neq('id', params.id)
-            .eq('is_available', true)
-            .limit(4);
-
-          setRelatedItems(related || []);
-        } catch (error) {
-          console.error('Error fetching related items:', error);
+          const relatedResponse = await itemsService.getItems({
+            category: itemData.categories?.[0],
+            limit: 4
+          });
+          
+          if (relatedResponse.data) {
+            const mappedRelated: RelatedItem[] = relatedResponse.data
+              .filter(relItem => relItem.id !== params.id)
+              .map(relItem => ({
+                id: relItem.id,
+                title: relItem.title,
+                price: relItem.price,
+                images: relItem.image_urls || relItem.images || [],
+                condition: relItem.condition,
+              }));
+            setRelatedItems(mappedRelated);
+          }
+        } catch {
           setRelatedItems([]);
         }
 
@@ -119,13 +165,23 @@ export default function ProductDetailsPage() {
         setError(err instanceof Error ? err.message : 'Failed to load item');
       } finally {
         setLoading(false);
+        itemRequestsInProgress.delete(itemId);
       }
     };
 
     if (params.id) {
       fetchItemDetails();
     }
-  }, [params.id, user?.id]);
+  }, [params.id, user?.id, authLoading]);
+
+  // Cleanup function to clear requests when component unmounts
+  useEffect(() => {
+    return () => {
+      if (params.id) {
+        itemRequestsInProgress.delete(params.id as string);
+      }
+    };
+  }, [params.id]);
 
   const handleLike = async () => {
     if (!isLoggedIn || !user) {
@@ -134,18 +190,31 @@ export default function ProductDetailsPage() {
     }
 
     try {
-      const response = await fetch(`/api/items/${params.id}/like`, {
-        method: 'POST',
-      });
+      // Note: Like functionality would need to be implemented in the Go backend
+      // For now, we'll use direct Supabase calls or implement this API endpoint
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      
+      if (isLiked) {
+        // Remove like
+        await supabase
+          .from('item_likes')
+          .delete()
+          .eq('user_id', user.id)
+          .eq('item_id', params.id);
+      } else {
+        // Add like
+        await supabase
+          .from('item_likes')
+          .insert({ user_id: user.id, item_id: params.id });
+      }
 
-      if (response.ok) {
-        setIsLiked(!isLiked);
-        if (item) {
-          setItem({
-            ...item,
-            likes: isLiked ? item.likes - 1 : item.likes + 1
-          });
-        }
+      setIsLiked(!isLiked);
+      if (item) {
+        setItem({
+          ...item,
+          likes: isLiked ? item.likes - 1 : item.likes + 1
+        });
       }
     } catch (error) {
       console.error('Error toggling like:', error);
@@ -174,8 +243,8 @@ export default function ProductDetailsPage() {
           text: `Check out this ${item?.title} on PesXChange`,
           url: window.location.href,
         });
-      } catch (error) {
-        console.log('Error sharing:', error);
+      } catch {
+        // Ignore sharing errors
       }
     } else {
       // Fallback: copy to clipboard

@@ -46,7 +46,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* Critical resource hints for performance */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link rel="preload" href="/icon.png" as="image" />
+        <link rel="preload" href="/favicon.png"/>
         <link rel="dns-prefetch" href="//pesxchange.app" />
         <link rel="dns-prefetch" href="//localhost:3000" />
         <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />

@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import Image from "next/image";
+import { itemsService } from "@/lib/services";
 
 interface SellFormContentsProps {
   user: User;
@@ -222,29 +223,26 @@ export function SellFormContents({ user }: SellFormContentsProps) {
         images: images
       };
 
-      const response = await fetch("/api/items", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
-        },
-        body: JSON.stringify(payload),
-      });
+      // Map payload to match our service interface
+      const createItemData = {
+        title: payload.title,
+        description: payload.description,
+        price: payload.price,
+        location: payload.location,
+        condition: payload.condition as 'new' | 'like-new' | 'good' | 'fair' | 'poor',
+        image_urls: payload.images,
+        categories: [payload.category]
+      };
 
-      if (response.ok) {
+      const response = await itemsService.createItem(createItemData);
+      
+      if (response.data) {
         setCurrentStep(4); // Success step
         setTimeout(() => {
           router.push("/item-listing?success=true");
         }, 2000);
       } else {
-        const data = await response.json().catch(() => ({}));
-        if (response.status === 401) {
-          setErrors({ submit: "Please log in again to continue" });
-        } else if (response.status === 429) {
-          setErrors({ submit: "Too many requests. Please wait a moment." });
-        } else {
-          setErrors({ submit: data.error || "Failed to create item" });
-        }
+        setErrors({ submit: "Failed to create item" });
       }
     } catch (error) {
       console.error("Error creating item:", error);

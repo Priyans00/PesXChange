@@ -2,8 +2,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { 
-  X, 
-  Camera, 
   MapPin, 
   DollarSign, 
   Package, 
@@ -16,8 +14,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import Image from "next/image";
 import { useAuth } from "@/contexts/auth-context";
+import { APIClient } from "@/lib/api-client";
+import ImageUpload from "@/components/image-upload";
 
 const categories = [
   { value: "Electronics", label: "Electronics", icon: "📱" },
@@ -51,7 +50,7 @@ export function SellFormContents() {
     price: "",
     condition: "",
     location: user?.profile.campus || "",
-    images: [] as File[],
+    images: [] as string[], // Changed to string URLs
     contactMethod: "chat", // chat, phone, email
     phone: user?.profile.phone || "",
     email: user?.email || "",
@@ -61,33 +60,34 @@ export function SellFormContents() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const handleInputChange = (field: string, value: string | boolean | File[]) => {
+  const handleInputChange = (field: string, value: string | boolean | string[]) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: "" }));
     }
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (formData.images.length + files.length > 5) {
-      setErrors(prev => ({ ...prev, images: "Maximum 5 images allowed" }));
-      return;
-    }
-    
-    handleInputChange("images", [...formData.images, ...files]);
-  };
-
-  const removeImage = (index: number) => {
-    const newImages = formData.images.filter((_, i) => i !== index);
-    handleInputChange("images", newImages);
-  };
+  // Image handling is now done by ImageUpload component
 
   const validateStep1 = () => {
     const newErrors: Record<string, string> = {};
     
-    if (!formData.title.trim()) newErrors.title = "Title is required";
-    if (!formData.description.trim()) newErrors.description = "Description is required";
+    if (!formData.title.trim()) {
+      newErrors.title = "Title is required";
+    } else if (formData.title.trim().length < 3) {
+      newErrors.title = "Title must be at least 3 characters long";
+    } else if (formData.title.trim().length > 100) {
+      newErrors.title = "Title must be less than 100 characters";
+    }
+    
+    if (!formData.description.trim()) {
+      newErrors.description = "Description is required";
+    } else if (formData.description.trim().length < 10) {
+      newErrors.description = "Description must be at least 10 characters long";
+    } else if (formData.description.trim().length > 1000) {
+      newErrors.description = "Description must be less than 1000 characters";
+    }
+    
     if (!formData.category) newErrors.category = "Category is required";
     if (!formData.condition) newErrors.condition = "Condition is required";
     
@@ -125,27 +125,6 @@ export function SellFormContents() {
     
     setIsSubmitting(true);
     try {
-      // File size validation
-      const MAX_IMAGE_SIZE = 5 * 1024 * 1024; // 5MB
-      for (const file of formData.images) {
-        if (file.size > MAX_IMAGE_SIZE) {
-          setErrors({ submit: `One or more images exceed the maximum size of 5MB.` });
-          setIsSubmitting(false);
-          return;
-        }
-      }
-      // Convert images to base64 in parallel
-      const imageUrls: string[] = await Promise.all(
-        formData.images.map(
-          (file) =>
-            new Promise<string>((resolve) => {
-              const reader = new FileReader();
-              reader.onload = () => resolve(reader.result as string);
-              reader.readAsDataURL(file);
-            })
-        )
-      );
-
       // Prepare the item data for submission
       const itemData = {
         title: formData.title,
@@ -154,27 +133,15 @@ export function SellFormContents() {
         category: formData.category,
         condition: formData.condition,
         location: formData.location,
-        images: imageUrls, // Use converted image URLs
+        images: formData.images, // Already URLs from ImageUpload component
         seller_id: user?.id, // Use the UUID from PESU auth
         is_available: true,
         views: 0,
       };
 
-      // Submit to the items API
-      const response = await fetch('/api/items', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(itemData),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to create item');
-      }
-
-      await response.json();
+      // Submit to the items API using the API client
+      const apiClient = new APIClient();
+      await apiClient.createItem(itemData);
       
       router.push("/item-listing?success=true");
     } catch (error) {
@@ -314,46 +281,12 @@ export function SellFormContents() {
 
         <div>
           <Label>Images * (Max 5)</Label>
-          <div className="space-y-4">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
-              <input
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleImageUpload}
-                className="hidden"
-                id="image-upload"
-              />
-              <label htmlFor="image-upload" className="cursor-pointer">
-                <Camera className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground mb-2">Click to upload images</p>
-                <p className="text-sm text-muted-foreground">PNG, JPG up to 10MB each</p>
-              </label>
-            </div>
-            
-            {formData.images.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                {formData.images.map((file, index) => (
-                  <div key={index} className="relative">
-                    <Image
-                      src={URL.createObjectURL(file)}
-                      alt={`Upload ${index + 1}`}
-                      width={100}
-                      height={100}
-                      className="rounded-lg object-cover w-full h-20"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(index)}
-                      className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <ImageUpload
+            images={formData.images}
+            onImagesChange={(images) => handleInputChange("images", images)}
+            maxImages={5}
+            className="mt-2"
+          />
           {errors.images && <p className="text-sm text-red-500 mt-1">{errors.images}</p>}
         </div>
       </div>

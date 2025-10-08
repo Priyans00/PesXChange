@@ -32,6 +32,8 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/auth-context";
 import { getDisplayName, getDisplayInitials, validateNickname } from "@/lib/utils";
 import Image from "next/image";
+import { profilesService } from "@/lib/services";
+import { apiClient } from "@/lib/api-client";
 
 interface UserStats {
   totalItemsSold: number;
@@ -75,7 +77,7 @@ interface ProfileData {
 }
 
 export function ProfileComponent() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [profileData, setProfileData] = useState<ProfileData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +97,8 @@ export function ProfileComponent() {
     });
   }, []);
 
-  const fetchProfileData = useCallback(async () => {
+  const fetchProfileData = useCallback(async (): Promise<void> => {
+    
     if (!user) {
       setError("Please log in to view your profile.");
       setIsLoading(false);
@@ -106,35 +109,125 @@ export function ProfileComponent() {
       setIsLoading(true);
       setError(null);
 
-      // Check cache first
+      // Check cache first to avoid duplicate API calls
       const cacheKey = `profile_data_${user.id}`;
       const cached = localStorage.getItem(cacheKey);
+      
       if (cached) {
-        const parsedCache = JSON.parse(cached);
-        const cacheAge = Date.now() - parsedCache.timestamp;
-        // Use cache if less than 2 minutes old (reduced from 5 minutes for security)
-        if (cacheAge < 2 * 60 * 1000) {
-          setProfileData(parsedCache.data);
-          setEditBio(parsedCache.data.profile.bio || "");
-          setEditPhone(parsedCache.data.profile.phone || "");
-          setEditNickname(parsedCache.data.profile.nickname || "");
-          setIsLoading(false);
-          return;
+        try {
+          const cachedData = JSON.parse(cached);
+          // Use cache if it's less than 5 minutes old
+          if (Date.now() - cachedData.timestamp < 5 * 60 * 1000) {
+
+            setProfileData(cachedData.data);
+            setEditBio(cachedData.data.profile.bio || "");
+            setEditPhone(cachedData.data.profile.phone || "");
+            setEditNickname(cachedData.data.profile.nickname || "");
+            return;
+          }
+        } catch {
+          // Invalid cache, proceed with API call
         }
       }
 
-      const response = await fetch(`/api/profile?userId=${user.id}`, {
+      // Direct API call to Go backend
+      const apiResponse = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com'}/api/profile/${user.id}`, {
+        method: 'GET',
         headers: {
-          'X-User-ID': user.id,
-        }
+          'Content-Type': 'application/json',
+        },
       });
       
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+      if (!apiResponse.ok) {
+        throw new Error(`HTTP ${apiResponse.status}: ${apiResponse.statusText}`);
       }
       
-      const data: ProfileData = await response.json();
+      const response = await apiResponse.json();
+      
+      if (!response.success || !response.data) {
+        throw new Error('Invalid response from server');
+      }
+      
+      // The Go backend returns the user profile directly in response.data
+      const userProfile = response.data;
+      
+      // Fetch user's items to calculate real statistics
+      let userItems: UserItem[] = [];
+      let stats = {
+        totalItemsSold: 0,
+        totalItemsBought: 0, // Not implemented yet
+        totalViews: 0,
+        totalLikes: 0, // Not implemented yet
+        averageRating: userProfile.rating || 0,
+      };
+      
+      try {
+        interface ItemsResponse {
+          success: boolean;
+          data: Array<{
+            id: string;
+            title: string;
+            price: number;
+            condition: string;
+            category?: string;
+            images: string[];
+            views?: number;
+            created_at: string;
+            is_available: boolean;
+            [key: string]: unknown;
+          }>;
+        }
+        
+        const itemsData = await apiClient.getItemsBySeller(user.id, 100, 0) as ItemsResponse;
+        
+        if (itemsData && itemsData.success && itemsData.data) {
+          userItems = itemsData.data.map((item): UserItem => ({
+            id: item.id,
+            title: item.title,
+            price: item.price,
+            condition: item.condition,
+            category: item.category || 'Uncategorized',
+            images: item.images || [],
+            views: item.views || 0,
+            likes: 0, // Not implemented yet
+            created_at: item.created_at || new Date().toISOString(),
+            is_available: item.is_available ?? true,
+          }));
+          
+          // Calculate real statistics
+          stats = {
+            totalItemsSold: userItems.filter(item => !item.is_available).length, // Sold = not available
+            totalItemsBought: 0, // Would need to implement purchase tracking
+            totalViews: userItems.reduce((sum, item) => sum + item.views, 0),
+            totalLikes: userItems.reduce((sum, item) => sum + item.likes, 0),
+            averageRating: userProfile.rating || 0,
+          };
+        }
+      } catch (error) {
+        console.error('Failed to fetch user items:', error);
+        console.error('Error details:', error instanceof Error ? error.message : error);
+      }
+      
+      // Convert to ProfileData format expected by the component
+      const data: ProfileData = {
+        profile: {
+          id: userProfile.id,
+          name: userProfile.name,
+          srn: userProfile.srn,
+          nickname: userProfile.nickname || null,
+          bio: userProfile.bio || null,
+          phone: userProfile.phone || null,
+          rating: userProfile.rating || 0,
+          verified: userProfile.verified || false,
+          location: userProfile.location || null,
+          year_of_study: null,
+          branch: userProfile.branch || null,
+          created_at: userProfile.created_at,
+          email: userProfile.email,
+        },
+        items: userItems,
+        stats: stats
+      };
       
       // Cache the data
       localStorage.setItem(cacheKey, JSON.stringify({
@@ -155,13 +248,19 @@ export function ProfileComponent() {
   }, [user]);
 
   useEffect(() => {
+    
+    // Wait for auth to finish loading before attempting to fetch data
+    if (authLoading) {
+      return; // Auth is still loading, don't do anything yet
+    }
+    
     if (user) {
       fetchProfileData();
     } else {
       setError("Please log in to view your profile.");
       setIsLoading(false);
     }
-  }, [user, fetchProfileData]);
+  }, [user, authLoading, fetchProfileData]);
 
   const handleUpdateProfile = async () => {
     if (!profileData || !user) return;
@@ -192,25 +291,15 @@ export function ProfileComponent() {
       setIsUpdating(true);
       setError(null);
 
-      const response = await fetch(`/api/profile?userId=${user.id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-User-ID': user.id,
-        },
-        body: JSON.stringify({
-          bio: bioTrimmed || null,
-          phone: phoneTrimmed || null,
-          nickname: nicknameTrimmed || null,
-        }),
-      });
+      const updateData = {
+        bio: bioTrimmed || undefined,
+        phone: phoneTrimmed || undefined, // Go backend uses 'phone', not 'contact_number'
+        nickname: nicknameTrimmed || undefined,
+      };
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to update profile');
-      }
+      const response = await profilesService.updateProfile(user.id, updateData);
 
-      const result = await response.json();
+      const result = response.data;
 
       // Update the profile data with the new values
       if (profileData) {
@@ -218,9 +307,9 @@ export function ProfileComponent() {
           ...profileData,
           profile: {
             ...profileData.profile,
-            bio: result.bio,
-            phone: result.phone,
-            nickname: result.nickname,
+            bio: result.bio || null,
+            phone: result.phone || null, // Go backend uses 'phone'
+            nickname: result.nickname || null,
           }
         };
         setProfileData(updatedProfileData);
