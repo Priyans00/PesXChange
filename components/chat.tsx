@@ -3,15 +3,8 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Send, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { APIClient } from "@/lib/api-client";
-
-type Message = {
-  id: string;
-  sender_id: string;
-  receiver_id: string;
-  message: string;
-  created_at?: string;
-};
+import { messagesService } from "@/lib/services";
+import type { Message } from "@/lib/services";
 
 // Message cache to reduce API calls
 const messageCache = new Map<string, { messages: Message[]; timestamp: number }>();
@@ -73,36 +66,31 @@ export function Chat({
     return `${user1}-${user2}`;
   }, [currentUserId, otherUserId]);
 
-  const fetchMessages = useCallback(async () => {
+  const fetchMessages = useCallback(async (skipCache = false) => {
     try {
-      // Check cache first
-      const cached = getMessageCache(conversationKey);
-      if (cached) {
-        setMessages(cached.messages);
-        return;
-      }
-
-      const res = await fetch(
-        `/api/messages?user1=${currentUserId}&user2=${otherUserId}`,
-        {
-          headers: {
-            'Cache-Control': 'no-cache',
-          }
+      // Check cache first unless explicitly skipped
+      if (!skipCache) {
+        const cached = getMessageCache(conversationKey);
+        if (cached) {
+          setMessages(cached.messages);
+          return;
         }
-      );
-
-      if (!res.ok) {
-        throw new Error(`Failed to fetch messages: ${res.status}`);
       }
 
-      const data = await res.json();
-      const messageList = Array.isArray(data) ? data : [];
+      const response = await messagesService.getMessages(otherUserId, "", 50, 0);
       
-      setMessages(messageList);
+      const messageList = response.data || [];
+      
+      // Sort messages by created_at in ascending order (oldest first, newest at bottom)
+      const sortedMessages = messageList.sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      );
+      
+      setMessages(sortedMessages);
       
       // Update cache
       setMessageCache(conversationKey, {
-        messages: messageList,
+        messages: sortedMessages,
         timestamp: Date.now()
       });
       
@@ -112,17 +100,19 @@ export function Chat({
     }
   }, [currentUserId, otherUserId, conversationKey]);
 
-  // Memoized message update handler
+  // Memoized message update handler for real-time updates
   const handleNewMessage = useCallback((newMessage: Message) => {
-    if (
+    const isRelevantMessage = 
       (newMessage.sender_id === currentUserId && newMessage.receiver_id === otherUserId) ||
-      (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUserId)
-    ) {
+      (newMessage.sender_id === otherUserId && newMessage.receiver_id === currentUserId);
+    
+    if (isRelevantMessage) {
       setMessages(prevMessages => {
         // Prevent duplicates
         const exists = prevMessages.some(msg => msg.id === newMessage.id);
         if (exists) return prevMessages;
         
+        // Add new message at the end (newest at bottom)
         const updated = [...prevMessages, newMessage];
         
         // Update cache
@@ -134,34 +124,38 @@ export function Chat({
         return updated;
       });
     }
-  }, [currentUserId, otherUserId, conversationKey]);
+    // currentUserId is captured in closure and used for message filtering
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otherUserId, conversationKey]);
 
   useEffect(() => {
     fetchMessages();
 
-    // Set up real-time subscription
+    // Set up real-time subscription for new messages
     const channel = supabase
-      .channel(`messages_${conversationKey}`)
+      .channel(`messages:${conversationKey}`)
       .on(
         "postgres_changes",
         { 
           event: "INSERT", 
           schema: "public", 
-          table: "messages",
-          filter: `or(and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId}))`
+          table: "messages"
         },
         (payload) => {
-          handleNewMessage(payload.new as Message);
+          const newMsg = payload.new as Message;
+          // Only handle messages relevant to this conversation
+          if (
+            (newMsg.sender_id === currentUserId && newMsg.receiver_id === otherUserId) ||
+            (newMsg.sender_id === otherUserId && newMsg.receiver_id === currentUserId)
+          ) {
+            handleNewMessage(newMsg);
+          }
         }
       )
       .subscribe();
 
-    // Reduced polling frequency - rely more on real-time updates
-    const interval = setInterval(fetchMessages, 30000); // 30 seconds instead of 5
-
     return () => {
       supabase.removeChannel(channel);
-      clearInterval(interval);
     };
   }, [fetchMessages, currentUserId, otherUserId, conversationKey, handleNewMessage]);
 
@@ -174,13 +168,27 @@ export function Chat({
     if (!input.trim() || isSending) return;
 
     setIsSending(true);
+    const messageText = input.trim();
+    setInput(""); // Clear input immediately for better UX
 
     try {
-      const apiClient = new APIClient();
-      await apiClient.sendDirectMessage(currentUserId, otherUserId, input.trim());
-      setInput("");
+      const response = await messagesService.sendMessage({
+        receiver_id: otherUserId,
+        item_id: "", // Empty string for direct messaging
+        message: messageText,
+      });
+      
+      // Real-time subscription will handle adding the message to the UI
+      // But add it optimistically for instant feedback
+      if (response.data) {
+        handleNewMessage(response.data);
+      }
+      
+      // Invalidate cache to ensure fresh data on next load
+      messageCache.delete(conversationKey);
     } catch (error) {
       console.error("Failed to send message:", error);
+      setInput(messageText); // Restore input on error
     } finally {
       setIsSending(false);
     }

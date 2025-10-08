@@ -51,33 +51,76 @@ export function ChatPageContent() {
           data = [];
         }
 
+        // Data is already in Conversation format from the API
+        // Remove duplicates by other_user_id
+        const uniqueTransformedData = data.filter((conversation, index, self) => 
+          index === self.findIndex(c => c.other_user_id === conversation.other_user_id)
+        );
+
+        // Fetch user details for all conversations
+        const conversationsWithUserDetails = await Promise.all(
+          uniqueTransformedData.map(async (conversation) => {
+            try {
+              const supabase = createClient();
+              const { data: userData } = await supabase
+                .from("user_profiles")
+                .select("id, name, nickname")
+                .eq("id", conversation.other_user_id)
+                .single();
+
+              return {
+                ...conversation,
+                other_user_name: userData?.name || 'Unknown User',
+                other_user_nickname: userData?.nickname || userData?.name || 'Unknown User',
+              };
+            } catch (error) {
+              console.error(`Failed to fetch user details for ${conversation.other_user_id}:`, error);
+              return {
+                ...conversation,
+                other_user_name: 'Unknown User',
+                other_user_nickname: 'Unknown User',
+              };
+            }
+          })
+        );
+
         // Merge seller from listing page if not present
         if (otherUserId) {
-          const supabase = createClient();
-          const { data: sellerUser } = await supabase
-            .from("user_profiles")
-            .select("id, name, nickname")
-            .eq("id", otherUserId)
-            .single();
+          const existingIndex = conversationsWithUserDetails.findIndex(c => c.other_user_id === otherUserId);
+          if (existingIndex === -1) {
+            try {
+              const supabase = createClient();
+              const { data: sellerUser } = await supabase
+                .from("user_profiles")
+                .select("id, name, nickname")
+                .eq("id", otherUserId)
+                .single();
 
-          const name = sellerUser?.nickname || sellerUser?.name || "Unknown";
-          const exists = data.some((conversation) => conversation.other_user_id === otherUserId);
-
-          if (!exists) {
-            // Add a new conversation entry for this user
-            data = [{
-              other_user_id: otherUserId,
-              other_user_name: name,
-              other_user_nickname: name,
-              unread_count: 0,
-              last_message: undefined
-            }, ...data];
+              const name = sellerUser?.nickname || sellerUser?.name || "Unknown";
+              conversationsWithUserDetails.unshift({
+                other_user_id: otherUserId,
+                other_user_name: name,
+                other_user_nickname: name,
+                unread_count: 0,
+                last_message: undefined
+              });
+            } catch (error) {
+              console.error(`Failed to fetch seller details for ${otherUserId}:`, error);
+            }
           }
         }
 
-        setActiveChats(data);
+        setActiveChats(conversationsWithUserDetails);
       } catch (err) {
         console.error("Failed to fetch active chats:", err);
+        
+        // Check if it's an invalid token error
+        if (err instanceof Error && err.message === 'Invalid token') {
+          console.warn('Invalid token detected, redirecting to login');
+          router.push('/auth/login?redirectTo=/chat');
+          return;
+        }
+        
         setActiveChats([]); // Set empty array on error
       } finally {
         setLoading(false);
@@ -85,10 +128,19 @@ export function ChatPageContent() {
     };
 
     fetchActiveChats();
-  }, [currentUserId, otherUserId, authLoading]);
+  }, [currentUserId, otherUserId, authLoading, router]);
 
   const filteredChats = useMemo(
-    () => activeChats.filter((conversation) => conversation.other_user_id !== currentUserId),
+    () => {
+      // Filter out current user and remove duplicates by other_user_id
+      const uniqueChats = new Map<string, Conversation>();
+      activeChats
+        .filter((conversation) => conversation.other_user_id !== currentUserId)
+        .forEach((conversation) => {
+          uniqueChats.set(conversation.other_user_id, conversation);
+        });
+      return Array.from(uniqueChats.values());
+    },
     [activeChats, currentUserId]
   );
 

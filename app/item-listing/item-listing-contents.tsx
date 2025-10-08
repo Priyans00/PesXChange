@@ -505,9 +505,22 @@ function ItemCard({
       return null;
     }
     
-    return firstImage.startsWith('data:image/') || firstImage.startsWith('http') 
-      ? firstImage 
-      : null;
+    // Handle different image URL formats:
+    // 1. Base64 data URLs
+    if (firstImage.startsWith('data:image/')) {
+      return firstImage;
+    }
+    // 2. Full HTTP/HTTPS URLs
+    if (firstImage.startsWith('http')) {
+      return firstImage;
+    }
+    // 3. API endpoint URLs (relative paths like /api/items/...)
+    if (firstImage.startsWith('/api/')) {
+      const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com';
+      return `${API_BASE_URL}${firstImage}`;
+    }
+    
+    return null;
   }, [item.image_urls, item.images]);
 
   return (

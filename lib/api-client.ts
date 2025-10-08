@@ -120,6 +120,16 @@ export class APIClient {
           throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         const errorMessage = errorData.error || errorData.message || `HTTP error! status: ${response.status}`;
+        
+        // Special handling for invalid tokens - clear auth data
+        if (response.status === 401 && errorMessage === 'Invalid token') {
+          console.warn('Invalid token detected, clearing auth data');
+          // Clear stored auth data
+          localStorage.removeItem('pesu_auth_token');
+          localStorage.removeItem('pesu_auth_user');
+          // Optionally redirect to login, but let the component handle it
+        }
+        
         throw new Error(errorMessage);
       }
       

@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'via.placeholder.com',
       },
+      {
+        protocol: 'https',
+        hostname: 'iyrabfyteoyaaoctbvfh.supabase.co',
+      },
     ],
   },
 

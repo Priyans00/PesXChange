@@ -3,11 +3,11 @@ import { apiClient, PaginatedResponse } from './api-client';
 
 export interface Message {
   id: string;
-  content: string;
+  message: string;
   sender_id: string;
   receiver_id: string;
   created_at: string;
-  read: boolean;
+  is_read: boolean;
   sender?: {
     id: string;
     name: string;
