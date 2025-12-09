@@ -1,6 +1,8 @@
 // API Configuration for PesXChange Go Fiber Backend
 // This file centralizes all API endpoint configurations and provides a type-safe client
 
+import { fetchWithColdStartHandling } from './cold-start-handler';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://pesxchange-backend.onrender.com';
 
 export const API_ENDPOINTS = {
@@ -109,7 +111,11 @@ export class APIClient {
     };
 
     try {
-      const response = await fetch(url, config);
+      // Use cold-start handling wrapper instead of raw fetch
+      const response = await fetchWithColdStartHandling(url, {
+        ...config,
+        baseURL: this.baseURL,
+      });
       
       if (!response.ok) {
         // Try to get error details before throwing

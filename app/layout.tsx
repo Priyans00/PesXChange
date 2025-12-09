@@ -6,6 +6,7 @@ import { Navbar } from "@/components/pesu-navbar";
 import { AuthProvider } from "@/contexts/auth-context";
 import { ErrorBoundary } from "@/components/error-boundary";
 import LenisProvider from "@/components/LenisProvider";
+import { ColdStartNotification } from "@/components/cold-start-notification";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -72,6 +73,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
                 defaultTheme="system"
                 enableSystem
                 disableTransitionOnChange>
+                <ColdStartNotification />
                 <Navbar />
                 <main className="min-h-screen">
                   {children}
